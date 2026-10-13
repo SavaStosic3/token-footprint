@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { CARBON, ENERGY, WATER, addUsage, co2, gauge, ml, view } from './register'
+import { CARBON, ENERGY, WATER, addUsage, co2, gauge, ml, pack, view } from './register'
 
 const ZERO = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, wh: 0 }
 const usage = (model: string) => ({
@@ -37,6 +37,34 @@ test('gauge names the milestone reached and fills toward the next', async () => 
   // CO2 climbs in driving distances: 300 g is past 1 km, on the way to 10 km.
   expect(gauge(300, CARBON).next?.[2]).toBe('10 km of driving')
   expect(view(1000, 0, 0).text.carbonSub).toBe('≈ 1.4 km of driving')
+})
+
+test('pack fills each line up to the width, then starts another', async () => {
+  const parts = ['aaaa', 'bbbb', 'cccc'].map(text => [{ text }])
+  const lines = (width: number) => pack(parts, width).map(line => line.map(s => s.text).join(''))
+  expect(lines(11)).toEqual(['aaaa · bbbb', 'cccc'])
+  expect(lines(100)).toEqual(['aaaa · bbbb · cccc'])
+  expect(lines(4)).toEqual(['aaaa', 'bbbb', 'cccc'])
+})
+
+test('a short pane above the prompt still shows all three numbers', async $ => {
+  const inline = (bodyColumns: number, bodyRows: number) =>
+    $.ui.mount({
+      plugin: 'token-footprint',
+      surface: 'terminal',
+      component: 'Pane',
+      requestId: 'token-footprint',
+      props: { ...PANE_PROPS, placement: 'inline' as const, bodyColumns, scroll: { offset: 0, bodyRows } },
+    })
+  for (const [columns, rows] of [[60, 3], [40, 2], [120, 1]] as const) {
+    const ui = await inline(columns, rows)
+    const drawn = JSON.stringify(await ui.drawn())
+    expect(drawn).toMatch(/water/)
+    expect(drawn).toMatch(/energy/)
+    expect(drawn).toMatch(/CO2/)
+    expect(drawn).not.toMatch(/█/)
+    await ui.unmount()
+  }
 })
 
 test('the usage rate reads idle when nothing streams', async () => {

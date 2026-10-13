@@ -114,6 +114,20 @@ const spark = (list: Prompt[]) => {
   const max = Math.max(...shown.map(p => p.wh), 1e-9)
   return shown.map(p => '▁▂▃▄▅▆▇█'[Math.min(7, Math.floor((p.wh / max) * 8))]).join('')
 }
+// Rows the full terminal view needs; with less room the compact one draws instead.
+const FULL_ROWS = 16
+type Span = { text: string; color?: string; bold?: boolean }
+// Packs parts (runs of spans) into as few lines as fit the width, joined by " · ".
+export function pack(parts: Span[][], width: number): Span[][] {
+  const len = (spans: Span[]) => spans.reduce((n, s) => n + s.text.length, 0)
+  const lines: Span[][] = []
+  for (const part of parts) {
+    const last = lines.at(-1)
+    if (last && len(last) + 3 + len(part) <= width) last.push({ text: ' · ' }, ...part)
+    else lines.push([...part])
+  }
+  return lines
+}
 const passed = (steps: Milestone[], before: number, after: number) => steps.filter(([size]) => before < size && after >= size).at(-1)
 
 // Everything a drawing needs. Its text has no emoji: terminals disagree on their
@@ -278,6 +292,35 @@ export const register: Register = on => {
 
     if (e.surface === 'terminal') {
       const { Box, Text } = $.ui.resolve(e)
+      const { placement, bodyColumns, scroll } = e.props
+      // Above the prompt, or docked but short: pack the numbers into as few lines as the room holds,
+      // dropping the comparisons when even that is too tall, so all three always show.
+      if (placement === 'inline' || scroll.bodyRows < FULL_ROWS) {
+        const flat = (s: string) => s.replace(/\s+/g, ' ')
+        const head = (s: string, color: string): Span => ({ text: flat(s), color, bold: true })
+        const rate: Span = { text: flat(t.rate), ...(v.mlPerMin > 0 ? { color: WATER_COLOR } : {}) }
+        const roomy = pack(
+          [
+            [head(t.water, WATER_COLOR), { text: ` ${t.waterSub}` }],
+            [head(t.energy, ENERGY_COLOR), { text: ` ${t.energySub}` }],
+            [head(t.carbon, CARBON_COLOR), { text: ` ${t.carbonSub}` }],
+            [{ text: flat(t.prompt) }],
+            [rate],
+          ],
+          bodyColumns,
+        )
+        const lines =
+          roomy.length <= scroll.bodyRows
+            ? roomy
+            : pack([[head(t.water, WATER_COLOR)], [head(t.energy, ENERGY_COLOR)], [head(t.carbon, CARBON_COLOR)], [rate]], bodyColumns)
+        return (
+          <Box flexDirection="column">
+            {lines.map(line => (
+              <Text>{line.map(s => (s.color ? <Text color={s.color} bold={s.bold === true}>{s.text}</Text> : <Text dimColor>{s.text}</Text>))}</Text>
+            ))}
+          </Box>
+        )
+      }
       return (
         <Box flexDirection="column" gap={1}>
           <Box flexDirection="column">
