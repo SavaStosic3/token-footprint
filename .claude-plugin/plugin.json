@@ -1,6 +1,6 @@
 {
   "name": "token-footprint",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Live pane estimating the electricity and water each prompt and the whole session uses, from its tokens.",
   "types": "./types/index.d.ts"
 }
