@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { ENERGY, WATER, addUsage, gauge, ml, view } from './register'
+import { CARBON, ENERGY, WATER, addUsage, co2, gauge, ml, view } from './register'
 
 const ZERO = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, wh: 0 }
 const usage = (model: string) => ({
@@ -27,12 +27,16 @@ test('energy scales with tokens and model size', async () => {
   expect(addUsage(ZERO, usage('claude-haiku-4-5')).wh).toBeLessThan(sonnet.wh)
   expect(addUsage(ZERO, usage('claude-opus-5-5')).wh).toBeGreaterThan(sonnet.wh)
   expect(Math.round(ml(1) * 10)).toBe(42)
+  expect(co2(1)).toBe(0.35)
 })
 
 test('gauge names the milestone reached and fills toward the next', async () => {
   expect(gauge(100, WATER)).toMatchObject({ many: 'shot glasses', fill: 0.4 })
   expect(gauge(0.01, ENERGY)).toMatchObject({ many: 'web searches', fill: 0.01 / 0.3 })
   expect(gauge(1e9, ENERGY)).toMatchObject({ many: 'US home-days', fill: 1, next: undefined })
+  // CO2 climbs in driving distances: 300 g is past 1 km, on the way to 10 km.
+  expect(gauge(300, CARBON).next?.[2]).toBe('10 km of driving')
+  expect(view(1000, 0, 0).text.carbonSub).toBe('≈ 1.4 km of driving')
 })
 
 test('the usage rate reads idle when nothing streams', async () => {
@@ -64,10 +68,11 @@ test('a model step lands in the prompt and the pane draws it on both surfaces', 
     const ui = await $.ui.mount({ plugin: 'token-footprint', surface, component: 'Pane', requestId: 'token-footprint', props: PANE_PROPS })
     // The terminal draws text; the desktop draws cards whose alt text carries the same lines.
     const drawn = JSON.stringify(await ui.drawn())
-    // 0.7 Wh -> 2.9 mL: past a drop, on the way to a teaspoon.
-    expect(drawn).toMatch(/this prompt +2\.9 mL · 700 mWh/)
+    // 0.7 Wh -> 2.9 mL: past a drop, on the way to a teaspoon; ~0.25 g CO2, about a metre of driving.
+    expect(drawn).toMatch(/this prompt +2\.9 mL · 700 mWh · 0\.2[45] g CO2/)
     expect(drawn).toMatch(/≈ 59 drops/)
     expect(drawn).toMatch(/next: teaspoon 59%/)
+    expect(drawn).toMatch(/≈ 1 m of driving/)
     // Emoji widths differ between terminals and shift every cell drawn after one.
     if (surface === 'terminal') expect(/\p{Extended_Pictographic}/u.test(drawn)).toBe(false)
     else expect(drawn).toMatch(/<svg/)
