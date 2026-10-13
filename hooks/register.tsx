@@ -216,8 +216,8 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'footprint' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'Footprint' })
-    return { text: 'Footprint pane opened.' }
+    const opened = await $.ui.open({ id: PANE, title: 'Footprint' })
+    return { text: opened.isPlaced ? 'Footprint pane opened.' : `The Footprint pane can't be shown here yet: ${opened.reason}` }
   })
 
   // Subagent runs raise no turn.start, so their steps add to the prompt that spawned them.
