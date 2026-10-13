@@ -11,10 +11,14 @@ A Claude Code mod that estimates, live, how much water, electricity and CO₂ yo
 In a Claude Code terminal session:
 
 ```
-/plugin install token-footprint --marketplace SavaStosic3/token-footprint
+/plugin marketplace add SavaStosic3/token-footprint
 ```
 
-Answer `y` to add the marketplace, then pick a scope.
+```
+/plugin install token-footprint@token-footprint
+```
+
+Pick a scope (user scope runs it in every session). The Footprint pane opens in that session and in every new one, in the terminal and the desktop app.
 
 ## How the numbers are estimated
 
