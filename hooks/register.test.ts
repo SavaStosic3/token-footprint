@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-import { CARBON, ENERGY, WATER, addUsage, co2, gauge, ml, pack, view } from './register'
+import { CARBON, ENERGY, WATER, addUsage, co2, gauge, ml, view } from '../core/footprint'
+import { pack } from './register'
 
 const ZERO = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, wh: 0, usd: 0 }
 const usage = (model: string) => ({
@@ -46,6 +47,10 @@ test('cost follows each model\'s published price', async () => {
   // A total saved before cost existed still adds up.
   const { usd: _, ...old } = ZERO
   expect(micro(usage('claude-sonnet-5-5'), old as typeof ZERO)).toBe(13000)
+  // A charge the host reports replaces the estimate.
+  expect(micro({ ...usage('claude-opus-5-5'), usd: 0.5 })).toBe(500000)
+  // Copilot spells versions with dots.
+  expect(micro(usage('claude-opus-5.5'))).toBe(micro(usage('claude-opus-5-5')))
   // Dollars to the cent, with a USD suffix.
   expect(view(0, 0, 0, 5.214, 0.0042).text.cost).toBe('cost   $5.21 USD')
   expect(view(0, 0, 0, 5.214, 0.0042).text.costSub).toBe('this prompt $0.00 USD')

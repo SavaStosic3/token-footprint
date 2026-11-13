@@ -1,0 +1,66 @@
+{
+  "name": "token-footprint",
+  "displayName": "Token Footprint",
+  "description": "Shows the water, electricity, CO2 and cost of your GitHub Copilot Chat requests.",
+  "version": "0.1.0",
+  "publisher": "SavaStosic3",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SavaStosic3/token-footprint"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tokenFootprint",
+          "title": "Footprint",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "tokenFootprint": [
+        {
+          "type": "webview",
+          "id": "tokenFootprint.card",
+          "name": "Footprint"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "tokenFootprint.setUp",
+        "title": "Token Footprint: Turn on Copilot Chat's usage log"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
+    "check": "tsc --noEmit",
+    "test": "node --test 'src/*.spec.ts'",
+    "package": "npm run check && npm test && npm run build && vsce package --skip-license -o token-footprint.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/vscode": "~1.100.0",
+    "@vscode/vsce": "^4.1.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}
