@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { CARBON, ENERGY, WATER, addUsage, co2, gauge, ml, pack, view } from './register'
 
-const ZERO = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, wh: 0 }
+const ZERO = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, wh: 0, usd: 0 }
 const usage = (model: string) => ({
   model,
   input_tokens: 1000,
@@ -30,13 +30,31 @@ test('energy scales with tokens and model size', async () => {
   expect(co2(1)).toBe(0.35)
 })
 
+test('cost follows each model\'s published price', async () => {
+  // In millionths of a dollar, so the arithmetic is exact.
+  const micro = (u: ReturnType<typeof usage>, sum = ZERO) => Math.round(addUsage(sum, u).usd * 1e6)
+  // 1000 input, 1000 output, 10000 cache-read tokens at each model's $ per 1M.
+  expect(micro(usage('claude-sonnet-5-5'))).toBe(2000 + 10000 + 1000)
+  expect(micro(usage('claude-opus-5-5'))).toBe(4000 + 20000 + 2000)
+  expect(micro(usage('gpt-6.1-terra'))).toBe(1000 + 5000 + 500)
+  // Past 272K prompt tokens GPT-6.1 Sol bills the whole request at its long-context rate.
+  expect(micro({ ...usage('gpt-6.1-sol'), input_tokens: 300000 })).toBe(300000 * 4 + 15000 + 2000)
+  expect(micro(usage('gemini-4-argon'))).toBeGreaterThan(0)
+  expect(micro(usage('gemini-5-carbon'))).toBe(micro(usage('gemini-4-argon')))
+  // No published price on file: no cost.
+  expect(micro(usage('claude-haiku-4-5'))).toBe(0)
+  // A total saved before cost existed still adds up.
+  const { usd: _, ...old } = ZERO
+  expect(micro(usage('claude-sonnet-5-5'), old as typeof ZERO)).toBe(13000)
+})
+
 test('gauge names the milestone reached and fills toward the next', async () => {
   expect(gauge(100, WATER)).toMatchObject({ many: 'shot glasses', fill: 0.4 })
   expect(gauge(0.01, ENERGY)).toMatchObject({ many: 'web searches', fill: 0.01 / 0.3 })
   expect(gauge(1e9, ENERGY)).toMatchObject({ many: 'US home-days', fill: 1, next: undefined })
   // CO2 climbs in driving distances: 300 g is past 1 km, on the way to 10 km.
   expect(gauge(300, CARBON).next?.[2]).toBe('10 km of driving')
-  expect(view(1000, 0, 0).text.carbonSub).toBe('≈ 1.4 km of driving')
+  expect(view(1000, 0, 0, 0, 0).text.carbonSub).toBe('≈ 1.4 km of driving')
 })
 
 test('pack fills each line up to the width, then starts another', async () => {
@@ -47,7 +65,7 @@ test('pack fills each line up to the width, then starts another', async () => {
   expect(lines(4)).toEqual(['aaaa', 'bbbb', 'cccc'])
 })
 
-test('a short pane above the prompt still shows all three numbers', async $ => {
+test('a short pane above the prompt still shows all four numbers', async $ => {
   const inline = (bodyColumns: number, bodyRows: number) =>
     $.ui.mount({
       plugin: 'token-footprint',
@@ -62,14 +80,15 @@ test('a short pane above the prompt still shows all three numbers', async $ => {
     expect(drawn).toMatch(/water/)
     expect(drawn).toMatch(/energy/)
     expect(drawn).toMatch(/CO2/)
+    expect(drawn).toMatch(/cost/)
     expect(drawn).not.toMatch(/█/)
     await ui.unmount()
   }
 })
 
 test('the usage rate reads idle when nothing streams', async () => {
-  expect(view(1, 1, 0).text.rate).toBe('usage rate  idle')
-  expect(view(1, 1, 12.6).text.rate).toBe('usage rate  12.6 mL/min')
+  expect(view(1, 1, 0, 0, 0).text.rate).toBe('usage rate  idle')
+  expect(view(1, 1, 12.6, 0, 0).text.rate).toBe('usage rate  12.6 mL/min')
 })
 
 test('a model step lands in the prompt and the pane draws it on both surfaces', async ($, on) => {
@@ -82,11 +101,11 @@ test('a model step lands in the prompt and the pane draws it on both surfaces', 
       answer: 'hello world',
       toolUses: [],
       stopReason: 'end_turn' as const,
-      usage: usage('claude-sonnet-4-5'),
+      usage: usage('claude-sonnet-5-5'),
     }
   })
   await $.turn.start({ text: 'fix the bug', turnId: 't1' })
-  const step = $.turn.step({ turnId: 't1', index: 0, model: 'claude-sonnet-4-5', messageCount: 1 })
+  const step = $.turn.step({ turnId: 't1', index: 0, model: 'claude-sonnet-5-5', messageCount: 1 })
   const chunks = []
   for await (const chunk of step) chunks.push(chunk)
   expect(chunks).toHaveLength(1)
@@ -101,6 +120,8 @@ test('a model step lands in the prompt and the pane draws it on both surfaces', 
     expect(drawn).toMatch(/≈ 59 drops/)
     expect(drawn).toMatch(/next: teaspoon 59%/)
     expect(drawn).toMatch(/≈ 1 m of driving/)
+    // Sonnet 5.5 at list price: $0.013.
+    expect(drawn).toMatch(/this prompt \$0\.013/)
     // Emoji widths differ between terminals and shift every cell drawn after one.
     if (surface === 'terminal') expect(/\p{Extended_Pictographic}/u.test(drawn)).toBe(false)
     else expect(drawn).toMatch(/<svg/)
