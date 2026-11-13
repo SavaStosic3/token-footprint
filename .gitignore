@@ -6,3 +6,8 @@
 vscode/node_modules/
 vscode/dist/
 vscode/*.vsix
+
+# GitHub Copilot app canvas build output
+copilot-app/node_modules/
+copilot-app/token-footprint/
+copilot-app/token-footprint-copilot-app.mjs

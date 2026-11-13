@@ -1,0 +1,18 @@
+{
+  "name": "token-footprint-copilot-app",
+  "private": true,
+  "description": "Footprint canvas for the GitHub Copilot app. Builds token-footprint/extension.mjs.",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=esm --external:@github/copilot-sdk --external:@github/copilot-sdk/* --outfile=token-footprint/extension.mjs && cp token-footprint/extension.mjs token-footprint-copilot-app.mjs",
+    "check": "tsc --noEmit",
+    "test": "node --test 'src/*.spec.ts'",
+    "package": "npm run check && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@github/copilot-sdk": "^1.0.33",
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}
