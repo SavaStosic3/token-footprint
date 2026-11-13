@@ -46,9 +46,9 @@ test('cost follows each model\'s published price', async () => {
   // A total saved before cost existed still adds up.
   const { usd: _, ...old } = ZERO
   expect(micro(usage('claude-sonnet-5-5'), old as typeof ZERO)).toBe(13000)
-  // Dollars with a USD suffix, keeping fractions of a cent visible.
+  // Dollars to the cent, with a USD suffix.
   expect(view(0, 0, 0, 5.214, 0.0042).text.cost).toBe('cost   $5.21 USD')
-  expect(view(0, 0, 0, 5.214, 0.0042).text.costSub).toBe('this prompt $0.0042 USD')
+  expect(view(0, 0, 0, 5.214, 0.0042).text.costSub).toBe('this prompt $0.00 USD')
 })
 
 test('gauge names the milestone reached and fills toward the next', async () => {
@@ -123,8 +123,8 @@ test('a model step lands in the prompt and the pane draws it on both surfaces', 
     expect(drawn).toMatch(/≈ 59 drops/)
     expect(drawn).toMatch(/next: teaspoon 59%/)
     expect(drawn).toMatch(/≈ 1 m of driving/)
-    // Sonnet 5.5 at list price: $0.013.
-    expect(drawn).toMatch(/this prompt \$0\.013 USD/)
+    // Sonnet 5.5 at list price: $0.013, shown to the cent.
+    expect(drawn).toMatch(/this prompt \$0\.01 USD/)
     // Emoji widths differ between terminals and shift every cell drawn after one.
     if (surface === 'terminal') expect(/\p{Extended_Pictographic}/u.test(drawn)).toBe(false)
     else expect(drawn).toMatch(/<svg/)

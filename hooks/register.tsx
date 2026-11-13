@@ -135,7 +135,7 @@ const sig = (x: number) => x.toFixed(x < 10 ? 2 : x < 100 ? 1 : 0)
 const fmtWh = (wh: number) => (wh < 1 ? `${(wh * 1000).toFixed(0)} mWh` : wh < 1000 ? `${sig(wh)} Wh` : `${sig(wh / 1000)} kWh`)
 const fmtMl = (v: number) => (v < 100 ? `${v.toFixed(1)} mL` : v < 1000 ? `${v.toFixed(0)} mL` : `${sig(v / 1000)} L`)
 const fmtCo2 = (g: number) => (g < 1000 ? `${sig(g)} g` : g < 1e6 ? `${sig(g / 1000)} kg` : `${sig(g / 1e6)} t`)
-const fmtUsd = (x: number) => `$${x.toFixed(x < 0.01 ? 4 : x < 1 ? 3 : 2)} USD`
+const fmtUsd = (x: number) => `$${x.toFixed(2)} USD`
 const fmtKm =(km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`)
 const times = (n: number) => (n < 10 ? n.toFixed(1) : `${Math.round(n)}`)
 const bare = (m: Milestone) => m[2].replace(/^an? /, '')
