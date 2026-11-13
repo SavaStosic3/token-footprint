@@ -44,6 +44,57 @@ In a terminal, start `claude` and run:
 
 Choose the user scope. The Footprint pane then opens in every session, including in the Claude desktop app.
 
+## Install with an agent
+
+Your coding agent can do the install. Give it this prompt, naming where you use it:
+
+> Install token-footprint from https://github.com/SavaStosic3/token-footprint for [GitHub Copilot Chat in VS Code / the GitHub Copilot app / Claude Code]. Follow the "Steps for agents" in its README.
+
+### Steps for agents
+
+Show the user each command and get their OK before running it. If a download or install is blocked (no network access, a company policy, an approval the user declines), stop and tell the user. Don't work around it.
+
+**GitHub Copilot Chat in VS Code**
+
+1. Install the extension.
+
+   macOS or Linux:
+
+   ```bash
+   curl -fsSL -o "${TMPDIR:-/tmp}/token-footprint.vsix" https://github.com/SavaStosic3/token-footprint/releases/latest/download/token-footprint.vsix && code --install-extension "${TMPDIR:-/tmp}/token-footprint.vsix"
+   ```
+
+   Windows (PowerShell):
+
+   ```powershell
+   Invoke-WebRequest https://github.com/SavaStosic3/token-footprint/releases/latest/download/token-footprint.vsix -OutFile "$env:TEMP\token-footprint.vsix"; code --install-extension "$env:TEMP\token-footprint.vsix"
+   ```
+
+   If `code` isn't found on macOS, use `"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"` instead.
+2. Check that `code --list-extensions` lists `savastosic3.token-footprint`.
+3. Tell the user to reload VS Code, choose **Turn on** in the Token Footprint prompt, then **Reload window**, and **Restart** if VS Code asks. Only the user can do this step.
+
+**GitHub Copilot app**
+
+1. Run the command under [GitHub Copilot app](#github-copilot-app) for the user's OS. If `COPILOT_HOME` is set, use `$COPILOT_HOME/extensions/token-footprint/` instead of `~/.copilot/extensions/token-footprint/`.
+2. Check that `extension.mjs` is in that folder and isn't empty.
+3. Tell the user to click **New** in the app. Sessions that were open before the install don't load it, including the one you're running in.
+
+**Claude Code**
+
+1. Run these two commands. Both succeed if the plugin is already there.
+
+   ```bash
+   claude plugin marketplace add SavaStosic3/token-footprint
+   ```
+
+   ```bash
+   claude plugin install token-footprint@token-footprint --scope user
+   ```
+
+2. Check that `claude plugin list` shows `token-footprint@token-footprint` as enabled.
+3. Tell the user the pane appears in new sessions, or in this one after they type `/reload-plugins`.
+
 ## Good to know
 
 - **Privacy:** nothing leaves your computer. In VS Code, Token Footprint turns on Copilot Chat's local usage log, which holds model names and token counts but no prompt or reply text. If your company manages Copilot's telemetry settings, that may be blocked.
