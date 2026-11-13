@@ -4,6 +4,8 @@ export type Usage = {
   cacheRead: number
   cacheWrite: number
   wh: number
+  // USD at the model's published API list price; 0 for models without one.
+  usd: number
 }
 
 export type Prompt = Usage & { label: string }

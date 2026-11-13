@@ -21,6 +21,23 @@ const ML_PER_WH = { cooling: 1.1, power: 3.1 }
 const G_CO2_PER_WH = 0.35
 // g CO2 per km for a typical passenger car (EPA: ~400 g per mile).
 const G_CO2_PER_KM = 400 / 1.609
+// USD per 1M tokens, Standard tier, from each provider's pricing page (checked 2026-11-13).
+// Cache writes use the shortest retention (Anthropic 5 min, OpenAI 30 min).
+type Price = { input: number; output: number; cacheWrite: number; cacheRead: number }
+const usd = (input: number, output: number, cacheWrite: number, cacheRead: number): Price => ({ input, output, cacheWrite, cacheRead })
+// Gemini's launch prices double on 2026-12-01. Implicit caching only, so writes bill as plain input.
+const GEMINI = Date.now() < Date.UTC(2026, 11, 1) ? usd(2, 10, 2, 0.1) : usd(4, 20, 4, 0.2)
+// [model, price, price once a request's prompt passes LONG_PROMPT tokens]
+const PRICES: [RegExp, Price, Price?][] = [
+  [/opus-5-5/i, usd(4, 20, 5, 0.2)],
+  [/sonnet-5-5/i, usd(2, 10, 2.5, 0.1)],
+  [/gpt-6[.-]1-sol/i, usd(2, 10, 2.5, 0.1), usd(4, 15, 5, 0.2)],
+  [/gpt-6[.-]1-terra/i, usd(1, 5, 1.25, 0.05), usd(2, 7.5, 2.5, 0.1)],
+  [/gemini-4-argon/i, GEMINI],
+  // Google lists Gemini 4 Carbon; match a 5 too in case that is the id in use.
+  [/gemini-[45]-carbon/i, GEMINI],
+]
+const LONG_PROMPT = 272_000
 // Streamed text counts live at ~4 characters a token until the step's real usage replaces it.
 const CHARS_PER_TOKEN = 4
 const TICK_MS = 1000
@@ -57,8 +74,9 @@ export const CARBON: Milestone[] = [0.1, 1, 10, 100, 1000].map(km => {
 const WATER_COLOR = '#38bdf8'
 const ENERGY_COLOR = '#f59e0b'
 const CARBON_COLOR = '#a78bfa'
+const COST_COLOR = '#34d399'
 const PANE = 'token-footprint'
-const ZERO: Usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, wh: 0 }
+const ZERO: Usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, wh: 0, usd: 0 }
 
 const total = atom({ plugin: 'token-footprint', key: 'total' } as const, ZERO)
 const prompts = atom({ plugin: 'token-footprint', key: 'prompts' } as const, [])
@@ -78,6 +96,16 @@ export function addUsage<T extends Usage>(sum: T, u: TurnUsage): T {
       u.output_tokens * WH_PER_TOKEN.output +
       u.cache_creation_input_tokens * WH_PER_TOKEN.cacheWrite +
       u.cache_read_input_tokens * WH_PER_TOKEN.cacheRead)
+  const [, short, long] = PRICES.find(([re]) => re.test(u.model)) ?? []
+  const prompt = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
+  const p = prompt > LONG_PROMPT && long ? long : short
+  const cost = p
+    ? (u.input_tokens * p.input +
+        u.output_tokens * p.output +
+        u.cache_creation_input_tokens * p.cacheWrite +
+        u.cache_read_input_tokens * p.cacheRead) /
+      1e6
+    : 0
   return {
     ...sum,
     input: sum.input + u.input_tokens,
@@ -85,6 +113,8 @@ export function addUsage<T extends Usage>(sum: T, u: TurnUsage): T {
     cacheRead: sum.cacheRead + u.cache_read_input_tokens,
     cacheWrite: sum.cacheWrite + u.cache_creation_input_tokens,
     wh: sum.wh + wh,
+    // Totals saved before cost existed have no usd.
+    usd: (sum.usd ?? 0) + cost,
   }
 }
 
@@ -105,7 +135,8 @@ const sig = (x: number) => x.toFixed(x < 10 ? 2 : x < 100 ? 1 : 0)
 const fmtWh = (wh: number) => (wh < 1 ? `${(wh * 1000).toFixed(0)} mWh` : wh < 1000 ? `${sig(wh)} Wh` : `${sig(wh / 1000)} kWh`)
 const fmtMl = (v: number) => (v < 100 ? `${v.toFixed(1)} mL` : v < 1000 ? `${v.toFixed(0)} mL` : `${sig(v / 1000)} L`)
 const fmtCo2 = (g: number) => (g < 1000 ? `${sig(g)} g` : g < 1e6 ? `${sig(g / 1000)} kg` : `${sig(g / 1e6)} t`)
-const fmtKm = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`)
+const fmtUsd = (x: number) => `$${x.toFixed(x < 0.01 ? 4 : x < 1 ? 3 : 2)}`
+const fmtKm =(km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`)
 const times = (n: number) => (n < 10 ? n.toFixed(1) : `${Math.round(n)}`)
 const bare = (m: Milestone) => m[2].replace(/^an? /, '')
 const meter = (fill: number) => '█'.repeat(Math.round(fill * 16)).padEnd(16, '░')
@@ -115,7 +146,7 @@ const spark = (list: Prompt[]) => {
   return shown.map(p => '▁▂▃▄▅▆▇█'[Math.min(7, Math.floor((p.wh / max) * 8))]).join('')
 }
 // Rows the full terminal view needs; with less room the compact one draws instead.
-const FULL_ROWS = 16
+const FULL_ROWS = 18
 type Span = { text: string; color?: string; bold?: boolean }
 // Packs parts (runs of spans) into as few lines as fit the width, joined by " · ".
 export function pack(parts: Span[][], width: number): Span[][] {
@@ -132,7 +163,7 @@ const passed = (steps: Milestone[], before: number, after: number) => steps.filt
 
 // Everything a drawing needs. Its text has no emoji: terminals disagree on their
 // width, which shifts every cell drawn after one. The desktop card carries the icons.
-export function view(wh: number, promptWh: number, mlPerMin: number) {
+export function view(wh: number, promptWh: number, mlPerMin: number, usd: number, promptUsd: number) {
   const water = gauge(ml(wh), WATER)
   const power = gauge(wh, ENERGY)
   const carbon = gauge(co2(wh), CARBON)
@@ -142,6 +173,7 @@ export function view(wh: number, promptWh: number, mlPerMin: number) {
     wh,
     promptWh,
     mlPerMin,
+    usd,
     water,
     power,
     carbon,
@@ -156,6 +188,8 @@ export function view(wh: number, promptWh: number, mlPerMin: number) {
       carbon: `CO2    ${fmtCo2(co2(wh))}`,
       carbonSub: `≈ ${fmtKm(co2(wh) / G_CO2_PER_KM)} of driving`,
       carbonNext: next(carbon),
+      cost: `cost   ${fmtUsd(usd)}`,
+      costSub: `this prompt ${fmtUsd(promptUsd)}`,
       prompt: `this prompt  ${fmtMl(ml(promptWh))} · ${fmtWh(promptWh)} · ${fmtCo2(co2(promptWh))} CO2`,
       rate: `usage rate  ${rate}`,
     },
@@ -175,9 +209,9 @@ function cardSvg(v: View, list: Prompt[]): string {
 <text x="352" y="${y + 45}" font-size="12" fill="#cbd5e1" text-anchor="end">${sub}</text>`
   }
   const chip = (x: number, width: number, label: string, value: string, color: string) =>
-    `<rect x="${x}" y="214" width="${width}" height="50" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#1e2a44"/>
-<text x="${x + 14}" y="233" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#64748b">${label}</text>
-<text x="${x + 14}" y="253" font-size="13" font-weight="600" fill="${color}" style="font-variant-numeric: tabular-nums">${value}</text>`
+    `<rect x="${x}" y="280" width="${width}" height="50" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#1e2a44"/>
+<text x="${x + 14}" y="299" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#64748b">${label}</text>
+<text x="${x + 14}" y="319" font-size="13" font-weight="600" fill="${color}" style="font-variant-numeric: tabular-nums">${value}</text>`
 
   // The last bar is the prompt in flight, so it grows with the stream.
   const values = [...list.slice(-30).map(p => p.wh).slice(0, -1), v.promptWh]
@@ -186,10 +220,10 @@ function cardSvg(v: View, list: Prompt[]): string {
   const bars = values
     .map((wh, i) => {
       const barH = Math.max(2, (wh / max) * 36)
-      return `<rect x="${30 + i * 10.67 + 1}" y="${336 - barH}" width="8.67" height="${barH}" rx="2" fill="url(#bar)" opacity="${i === values.length - 1 ? 1 : 0.55}"/>`
+      return `<rect x="${30 + i * 10.67 + 1}" y="${402 - barH}" width="8.67" height="${barH}" rx="2" fill="url(#bar)" opacity="${i === values.length - 1 ? 1 : 0.55}"/>`
     })
     .join('')
-  const height = hasGraph ? 352 : 278
+  const height = hasGraph ? 418 : 344
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="380" height="${height}" viewBox="0 0 380 ${height}" font-family="ui-sans-serif, system-ui, 'Segoe UI', sans-serif">
 <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f1b2e"/><stop offset="1" stop-color="#0a1220"/></linearGradient>
@@ -198,20 +232,21 @@ function cardSvg(v: View, list: Prompt[]): string {
 ${row(14, WATER_COLOR, '💧 WATER', fmtMl(ml(v.wh)), `${t.waterSub} ${v.water.icon}`, t.waterNext)}
 ${row(80, ENERGY_COLOR, '⚡ ELECTRICITY', fmtWh(v.wh), `${t.energySub} ${v.power.icon}`, t.energyNext)}
 ${row(146, CARBON_COLOR, '💨 CO₂', fmtCo2(co2(v.wh)), `${t.carbonSub} 🚗`, t.carbonNext)}
+${row(212, COST_COLOR, '💵 COST', `${fmtUsd(v.usd).slice(1)} USD`, t.costSub, 'at API list price')}
 ${chip(14, 230, 'THIS PROMPT', `${fmtMl(ml(v.promptWh))} · ${fmtWh(v.promptWh)} · ${fmtCo2(co2(v.promptWh))}`, '#e2e8f0')}
 ${chip(256, 110, 'USAGE RATE', v.rate, v.mlPerMin > 0 ? '#7dd3fc' : '#64748b')}
 ${
   hasGraph
-    ? `<text x="16" y="290" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#64748b">USAGE PER PROMPT</text>
-<text x="364" y="290" font-size="10" fill="#64748b" text-anchor="end">tallest ${fmtWh(max)}</text>${bars}
-<line x1="30" y1="336.5" x2="350" y2="336.5" stroke="#263247"/>`
+    ? `<text x="16" y="356" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#64748b">USAGE PER PROMPT</text>
+<text x="364" y="356" font-size="10" fill="#64748b" text-anchor="end">tallest ${fmtWh(max)}</text>${bars}
+<line x1="30" y1="402.5" x2="350" y2="402.5" stroke="#263247"/>`
     : ''
 }</svg>`
 }
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'footprint', description: 'Show the water, electricity and CO2 this session has used' })
+    await $.command.register({ name: 'footprint', description: 'Show the water, electricity, CO2 and cost this session has used' })
     void $.ui.open({ id: PANE, title: 'Footprint' })
 
     // Turn the burn of the streams in flight into a usage rate, once a second.
@@ -278,7 +313,7 @@ export const register: Register = on => {
         carbon && `Session CO2 just passed ${carbon[2]}`,
       ].filter(Boolean)
       if (news.length > 0) $.ui.toast(news.join('  ·  '))
-      $.ui.status(`water ${fmtMl(ml(sum.wh))} · energy ${fmtWh(sum.wh)} · CO2 ${fmtCo2(co2(sum.wh))}`)
+      $.ui.status(`water ${fmtMl(ml(sum.wh))} · energy ${fmtWh(sum.wh)} · CO2 ${fmtCo2(co2(sum.wh))} · cost ${fmtUsd(sum.usd)}`)
     }
     return result
   })
@@ -287,7 +322,7 @@ export const register: Register = on => {
     const sum = await read($, total)
     const list = await read($, prompts)
     const now = await read($, live)
-    const v = view(sum.wh + now.pendingWh, (list.at(-1)?.wh ?? 0) + now.pendingWh, now.mlPerMin)
+    const v = view(sum.wh + now.pendingWh, (list.at(-1)?.wh ?? 0) + now.pendingWh, now.mlPerMin, sum.usd ?? 0, list.at(-1)?.usd ?? 0)
     const t = v.text
 
     if (e.surface === 'terminal') {
@@ -304,6 +339,7 @@ export const register: Register = on => {
             [head(t.water, WATER_COLOR), { text: ` ${t.waterSub}` }],
             [head(t.energy, ENERGY_COLOR), { text: ` ${t.energySub}` }],
             [head(t.carbon, CARBON_COLOR), { text: ` ${t.carbonSub}` }],
+            [head(t.cost, COST_COLOR), { text: ` ${t.costSub}` }],
             [{ text: flat(t.prompt) }],
             [rate],
           ],
@@ -312,7 +348,10 @@ export const register: Register = on => {
         const lines =
           roomy.length <= scroll.bodyRows
             ? roomy
-            : pack([[head(t.water, WATER_COLOR)], [head(t.energy, ENERGY_COLOR)], [head(t.carbon, CARBON_COLOR)], [rate]], bodyColumns)
+            : pack(
+                [[head(t.water, WATER_COLOR)], [head(t.energy, ENERGY_COLOR)], [head(t.carbon, CARBON_COLOR)], [head(t.cost, COST_COLOR)], [rate]],
+                bodyColumns,
+              )
         return (
           <Box flexDirection="column">
             {lines.map(line => (
@@ -353,6 +392,10 @@ export const register: Register = on => {
               <Text dimColor>  {t.carbonNext}</Text>
             </Text>
           </Box>
+          <Text>
+            <Text bold color={COST_COLOR}>{t.cost}</Text>
+            <Text dimColor>  {t.costSub}</Text>
+          </Text>
           <Box flexDirection="column">
             <Text dimColor>{t.prompt}</Text>
             {v.mlPerMin > 0 ? <Text color={WATER_COLOR}>{t.rate}</Text> : <Text dimColor>{t.rate}</Text>}
