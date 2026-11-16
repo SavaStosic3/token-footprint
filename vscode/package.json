@@ -4,6 +4,7 @@
   "description": "Shows the water, electricity, CO2 and cost of your GitHub Copilot Chat requests.",
   "version": "0.1.1",
   "publisher": "SavaStosic3",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/SavaStosic3/token-footprint"
@@ -47,6 +48,10 @@
       {
         "command": "tokenFootprint.setUp",
         "title": "Token Footprint: Turn on Copilot Chat's usage log"
+      },
+      {
+        "command": "tokenFootprint.turnOff",
+        "title": "Token Footprint: Turn off Copilot Chat's usage log"
       }
     ]
   },

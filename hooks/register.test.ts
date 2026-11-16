@@ -27,6 +27,15 @@ test('energy scales with tokens and model size', async () => {
   expect(addUsage(sonnet, usage('claude-sonnet-4-5')).cacheRead).toBe(20000)
   expect(addUsage(ZERO, usage('claude-haiku-4-5')).wh).toBeLessThan(sonnet.wh)
   expect(addUsage(ZERO, usage('claude-opus-5-5')).wh).toBeGreaterThan(sonnet.wh)
+  // Other providers' models are sized small, mid or large too. "gemini" must not read as "-mini".
+  const wh = (model: string) => addUsage(ZERO, usage(model)).wh
+  expect(wh('mai-code-1.1-flash')).toBe(wh('claude-haiku-4-5'))
+  expect(wh('gpt-6.1-terra')).toBe(sonnet.wh)
+  expect(wh('gemini-3.8-flash')).toBe(sonnet.wh)
+  expect(wh('gpt-6.1-sol')).toBe(wh('claude-opus-5-5'))
+  expect(wh('gemini-4-argon')).toBe(wh('claude-opus-5-5'))
+  expect(wh('some-unknown-model')).toBe(wh('claude-opus-5-5'))
+  expect(wh('claude-fable-5-2')).toBeGreaterThan(wh('claude-opus-5-5'))
   expect(Math.round(ml(1) * 10)).toBe(42)
   expect(co2(1)).toBe(0.35)
 })
@@ -42,6 +51,15 @@ test('cost follows each model\'s published price', async () => {
   expect(micro({ ...usage('gpt-6.1-sol'), input_tokens: 300000 })).toBe(300000 * 4 + 15000 + 2000)
   expect(micro(usage('gemini-4-argon'))).toBeGreaterThan(0)
   expect(micro(usage('gemini-5-carbon'))).toBe(micro(usage('gemini-4-argon')))
+  // Version-less ids are their own models: Opus 5 is not Opus 5.5, nor Sonnet 5 Sonnet 5.5.
+  expect(micro(usage('claude-opus-5'))).toBe(5000 + 25000 + 5000)
+  expect(micro(usage('claude-sonnet-5'))).toBe(2000 + 10000 + 2000)
+  expect(micro(usage('claude-fable-5-2'))).toBe(8000 + 40000 + 2000)
+  // Haiku 5.5 switches to its long-prompt price past 100K prompt tokens, not 272K.
+  expect(micro(usage('claude-haiku-5-5'))).toBe(100 + 500 + 100)
+  expect(micro({ ...usage('claude-haiku-5-5'), input_tokens: 100000 })).toBe(100000 * 0.5 + 2500 + 500)
+  expect(micro(usage('gpt-6-luna'))).toBe(100 + 500 + 100)
+  expect(micro(usage('mai-code-1.1-flash'))).toBe(200 + 1200 + 200)
   // No published price on file: no cost, and the call is counted as unpriced so the pane can say so.
   expect(micro(usage('claude-haiku-4-5'))).toBe(0)
   expect(addUsage(ZERO, usage('claude-haiku-4-5')).unpriced).toBe(1)

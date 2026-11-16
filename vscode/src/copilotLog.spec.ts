@@ -96,7 +96,7 @@ test('Copilot’s own charge replaces the API-price estimate when it is logged',
   assert.equal(costNote(t), 'Copilot credits + API price')
   assert.equal(costNote(tally(start(), parseLine(chat('gpt-6.1-terra', 1, 1))!)), 'at API list price')
   // A call with neither a charge nor a list price counts as $0, and the note says so.
-  t = tally(t, parseLine(chat('mai-code-1.1-flash', 1_000, 1_000, 0, 0, 'p4'))!)
+  t = tally(t, parseLine(chat('some-unlisted-model', 1_000, 1_000, 0, 0, 'p4'))!)
   assert.equal(Math.round(t.total.usd * 1e8), 3_019_748 + 600_000)
   assert.equal(costNote(t), 'some models have no price')
 })

@@ -101,7 +101,7 @@ Show the user each command and get their OK before running it. If a download or 
 - **Cost:** what Copilot charges, in AI credits at $0.01 each, when Copilot reports it. Otherwise it's the model's API list price. Models without a listed price count as $0, and the panel then says "some models have no price".
 - **Update:** in VS Code and the Copilot app, install again. In Claude Code, run `claude plugin update token-footprint@token-footprint`.
 - **Uninstall:**
-  - **VS Code:** uninstall the extension, then remove the `chat.agentHost.otel.*` and `github.copilot.chat.otel.*` settings it added.
+  - **VS Code:** run **Token Footprint: Turn off Copilot Chat's usage log** from the Command Palette, then uninstall the extension.
   - **Copilot app:** delete `~/.copilot/extensions/token-footprint`.
   - **Claude Code:** run `claude plugin uninstall token-footprint@token-footprint`.
 
@@ -109,13 +109,14 @@ Show the user each command and get their OK before running it. If a download or 
 
 These are estimates, not measurements. Every constant and price is in [`core/footprint.ts`](core/footprint.ts).
 
-- **Electricity:** about 0.5 mWh per output token for a Sonnet-class model, the mid-range of Epoch AI's estimates. That puts a typical reply near the ~0.3 Wh per query that Google, OpenAI and Microsoft Research report. Input and cached tokens count for less, and bigger models count for more.
+- **Electricity:** about 0.5 mWh per output token for a Sonnet-class model, the mid-range of Epoch AI's estimates. That puts a typical reply near the ~0.3 Wh per query that Google, OpenAI and Microsoft Research report. Input and cached tokens count for less. Models count by size: small ones (Haiku, GPT Luna, MAI-Code Flash) ×0.33, mid-size ones (Sonnet, GPT Terra, Gemini Hydrogen and Flash) ×1, large ones (Opus, GPT Sol, Gemini Argon and Carbon, and any model not listed) ×1.67, and Fable ×3.33.
 - **Water:** 4.2 mL per Wh: data-center cooling (from Google's Gemini disclosure) plus the water used to generate the electricity (US grid average).
 - **CO₂:** 0.35 g per Wh, the US grid average (EPA eGRID 2023), compared with a typical car at about 400 g per mile.
-- **Cost:** Copilot's own charge when it reports one ([AI credits](https://docs.github.com/en/copilot/concepts/billing-and-usage/individuals/billing)). Otherwise the model's published API price, checked 2026-11-13, for:
-  - Claude Opus 5.5 and Sonnet 5.5 ([Anthropic](https://platform.claude.com/docs/en/about-claude/pricing))
-  - GPT-6.1 Sol and Terra ([OpenAI](https://developers.openai.com/api/docs/pricing))
-  - Gemini 4 Argon and Carbon ([Google](https://aistudio.google.com/docs/pricing))
+- **Cost:** Copilot's own charge when it reports one ([AI credits](https://docs.github.com/en/copilot/concepts/billing-and-usage/individuals/billing)). Otherwise the model's published API price, checked 2026-11-15, for:
+  - Claude Fable 5.2, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5 and Haiku 5.5 ([Anthropic](https://platform.claude.com/docs/en/about-claude/pricing))
+  - GPT-6.1 Sol and Terra, GPT-6 Sol and Luna ([OpenAI](https://developers.openai.com/api/docs/pricing))
+  - Gemini 4 Argon, Carbon and Hydrogen, and Gemini 3.8 Flash ([Google](https://aistudio.google.com/docs/pricing))
+  - MAI-Code-1.1-Flash ([GitHub's Copilot rate](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing))
 
   That's what the tokens would cost on the API, not what a subscription bills.
 
@@ -128,3 +129,7 @@ With Node 22 or later:
 - **Claude Code plugin:** run `claude plugin test .` for its tests.
 
 Attach both built files to every release, so the `latest` download links keep working.
+
+## License
+
+[MIT](LICENSE)

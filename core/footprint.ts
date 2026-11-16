@@ -24,8 +24,16 @@ export type TokenUsage = {
 // (0.31, Joule 2026) report. Input-side weights follow Anthropic's price
 // ratios: fresh input 1/5 of output, cache write 1.25x input, cache read 0.1x.
 export const WH_PER_TOKEN = { output: 0.0005, input: 0.0001, cacheWrite: 0.000125, cacheRead: 0.00001 }
-// Model size relative to Sonnet, by list price. Unknown ids get the Opus factor.
-const MODEL_SCALE: [RegExp, number][] = [[/haiku/i, 0.33], [/sonnet/i, 1], [/opus/i, 1.67]]
+// Model size relative to a Sonnet-class model: small 0.33, mid-size 1, large 1.67,
+// after GitHub Copilot's Lightweight / Versatile / Powerful grouping of the models
+// it offers. Fable and GPT-6 Astra list at twice the large models' price, so count
+// double them. Ids that match nothing count as large.
+const MODEL_SCALE: [RegExp, number][] = [
+  [/haiku|luna|mai-code|flash-lite|-mini\b|-nano\b/i, 0.33],
+  [/sonnet|terra|hydrogen|flash/i, 1],
+  [/fable|astra/i, 3.33],
+  [/opus|-sol\b|argon|carbon/i, 1.67],
+]
 const DEFAULT_SCALE = 1.67
 // mL of water per Wh (= L/kWh). Cooling: Google's Gemini disclosure (0.26 mL
 // per 0.24 Wh). Power: water evaporated making the electricity (US grid avg,
@@ -35,24 +43,37 @@ const ML_PER_WH = { cooling: 1.1, power: 3.1 }
 const G_CO2_PER_WH = 0.35
 // g CO2 per km for a typical passenger car (EPA: ~400 g per mile).
 const G_CO2_PER_KM = 400 / 1.609
-// USD per 1M tokens, Standard tier, from each provider's pricing page (checked 2026-11-13).
+// USD per 1M tokens, Standard tier, from each provider's pricing page (checked 2026-11-15).
 // Cache writes use the shortest retention (Anthropic 5 min, OpenAI 30 min).
 type Price = { input: number; output: number; cacheWrite: number; cacheRead: number }
 const usd = (input: number, output: number, cacheWrite: number, cacheRead: number): Price => ({ input, output, cacheWrite, cacheRead })
-// Gemini's launch prices double on 2026-12-01. Implicit caching only, so writes bill as plain input.
-const GEMINI = Date.now() < Date.UTC(2026, 11, 1) ? usd(2, 10, 2, 0.1) : usd(4, 20, 4, 0.2)
-// [model, price, price once a request's prompt passes LONG_PROMPT tokens]
+// Google's launch prices double on a set date. Gemini has no cache-write price, so writes bill as plain input.
+const until = (year: number, month: number, before: Price, after: Price) => (Date.now() < Date.UTC(year, month - 1, 1) ? before : after)
+const GEMINI_4 = until(2026, 12, usd(2, 10, 2, 0.1), usd(4, 20, 4, 0.2))
+const GEMINI_FLASH = until(2027, 1, usd(0.75, 3.75, 0.75, 0.075), usd(1.5, 7.5, 1.5, 0.15))
+// A request whose prompt passes this many tokens bills wholly at the model's long-prompt price.
+const LONG_PROMPT = 272_000
+// [model, price, long-prompt price, long-prompt threshold when it isn't LONG_PROMPT]. First match wins.
 // Copilot spells versions with dots (claude-opus-5.5), Claude Code with dashes.
-const PRICES: [RegExp, Price, Price?][] = [
+const PRICES: [RegExp, Price, Price?, number?][] = [
+  [/fable-5[.-]2/i, usd(8, 40, 10, 0.2)],
   [/opus-5[.-]5/i, usd(4, 20, 5, 0.2)],
+  [/opus-5(?![.-]\d)/i, usd(5, 25, 6.25, 0.5)],
   [/sonnet-5[.-]5/i, usd(2, 10, 2.5, 0.1)],
+  [/sonnet-5(?![.-]\d)/i, usd(2, 10, 2.5, 0.2)],
+  [/haiku-5[.-]5/i, usd(0.1, 0.5, 0.125, 0.01), usd(0.5, 2.5, 0.625, 0.05), 100_000],
   [/gpt-6[.-]1-sol/i, usd(2, 10, 2.5, 0.1), usd(4, 15, 5, 0.2)],
   [/gpt-6[.-]1-terra/i, usd(1, 5, 1.25, 0.05), usd(2, 7.5, 2.5, 0.1)],
-  [/gemini-4-argon/i, GEMINI],
+  [/gpt-6-sol/i, usd(2, 10, 2.5, 0.2), usd(4, 15, 5, 0.4)],
+  [/gpt-6-luna/i, usd(0.1, 0.5, 0.125, 0.01), usd(0.2, 0.75, 0.25, 0.02)],
+  [/gemini-4-argon/i, GEMINI_4],
   // Google lists Gemini 4 Carbon; match a 5 too in case that is the id in use.
-  [/gemini-[45]-carbon/i, GEMINI],
+  [/gemini-[45]-carbon/i, GEMINI_4],
+  [/gemini-4-hydrogen/i, usd(1.5, 7.5, 1.5, 0.075)],
+  [/gemini-3[.-]8-flash/i, GEMINI_FLASH],
+  // Copilot's Auto pick. Priced on GitHub's Copilot models page; Microsoft sells it nowhere else.
+  [/mai-code-1[.-]1-flash/i, usd(0.2, 1.2, 0.25, 0.02)],
 ]
-const LONG_PROMPT = 272_000
 
 type Milestone = [size: number, icon: string, one: string, many: string]
 export const WATER: Milestone[] = [
@@ -100,9 +121,9 @@ export function addUsage<T extends Usage>(sum: T, u: TokenUsage): T {
       u.output_tokens * WH_PER_TOKEN.output +
       u.cache_creation_input_tokens * WH_PER_TOKEN.cacheWrite +
       u.cache_read_input_tokens * WH_PER_TOKEN.cacheRead)
-  const [, short, long] = PRICES.find(([re]) => re.test(u.model)) ?? []
+  const [, short, long, threshold = LONG_PROMPT] = PRICES.find(([re]) => re.test(u.model)) ?? []
   const prompt = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
-  const p = prompt > LONG_PROMPT && long ? long : short
+  const p = prompt > threshold && long ? long : short
   const cost =
     u.usd ??
     (p

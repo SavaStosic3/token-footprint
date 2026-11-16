@@ -54,6 +54,7 @@ export function activate(context: vscode.ExtensionContext) {
       },
     }),
     vscode.commands.registerCommand('tokenFootprint.setUp', () => setUp(ourLog)),
+    vscode.commands.registerCommand('tokenFootprint.turnOff', () => turnOff(ourLog)),
   )
 
   // Read what Copilot appends to the log. The agent host serves every window and
@@ -161,6 +162,33 @@ async function setUp(ourLog: string) {
   }
   const pick = await vscode.window.showInformationMessage(
     'Copilot Chat starts writing its usage log after a reload. If VS Code asks to restart, choose Restart.',
+    'Reload window',
+  )
+  if (pick) void vscode.commands.executeCommand('workbench.action.reloadWindow')
+}
+
+// Undoes setUp: removes the settings it wrote and deletes the log.
+async function turnOff(ourLog: string) {
+  // A log pointed somewhere else is the user's own setup: leave it.
+  const ours = known().filter(l => config(l.section).get<string>('outfile') === ourLog)
+  if (!ours.length) {
+    void vscode.window.showInformationMessage('Token Footprint’s usage log is already off.')
+    return
+  }
+  try {
+    for (const l of ours)
+      for (const key of ['enabled', ...Object.keys(l.file), 'outfile'])
+        await config(l.section).update(key, undefined, vscode.ConfigurationTarget.Global)
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Token Footprint couldn’t change Copilot’s usage log settings: ${error instanceof Error ? error.message : error}`)
+    return
+  }
+  // Copilot holds the file open until the reload, which blocks deleting it on Windows.
+  try {
+    fs.rmSync(ourLog, { force: true })
+  } catch {}
+  const pick = await vscode.window.showInformationMessage(
+    'Copilot Chat stops writing its usage log after a reload. If VS Code asks to restart, choose Restart.',
     'Reload window',
   )
   if (pick) void vscode.commands.executeCommand('workbench.action.reloadWindow')
