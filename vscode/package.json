@@ -2,7 +2,7 @@
   "name": "token-footprint",
   "displayName": "Token Footprint",
   "description": "Shows the water, electricity, CO2 and cost of your GitHub Copilot Chat requests.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "SavaStosic3",
   "repository": {
     "type": "git",

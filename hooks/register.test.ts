@@ -42,8 +42,11 @@ test('cost follows each model\'s published price', async () => {
   expect(micro({ ...usage('gpt-6.1-sol'), input_tokens: 300000 })).toBe(300000 * 4 + 15000 + 2000)
   expect(micro(usage('gemini-4-argon'))).toBeGreaterThan(0)
   expect(micro(usage('gemini-5-carbon'))).toBe(micro(usage('gemini-4-argon')))
-  // No published price on file: no cost.
+  // No published price on file: no cost, and the call is counted as unpriced so the pane can say so.
   expect(micro(usage('claude-haiku-4-5'))).toBe(0)
+  expect(addUsage(ZERO, usage('claude-haiku-4-5')).unpriced).toBe(1)
+  expect(addUsage(ZERO, usage('claude-sonnet-5-5')).unpriced).toBe(undefined)
+  expect(addUsage(ZERO, { ...usage('claude-haiku-4-5'), usd: 0.5 }).unpriced).toBe(undefined)
   // A total saved before cost existed still adds up.
   const { usd: _, ...old } = ZERO
   expect(micro(usage('claude-sonnet-5-5'), old as typeof ZERO)).toBe(13000)

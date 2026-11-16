@@ -4,8 +4,10 @@ export type Usage = {
   cacheRead: number
   cacheWrite: number
   wh: number
-  // USD at the model's published API list price; 0 for models without one.
+  // USD: what the host charged when it reports that, else the model's published API list price.
   usd: number
+  // Model calls counted in usd as nothing, having neither a charge nor a list price.
+  unpriced?: number
 }
 
 export type Prompt = Usage & { label: string }

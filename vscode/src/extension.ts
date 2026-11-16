@@ -35,10 +35,13 @@ export function activate(context: vscode.ExtensionContext) {
     const last = t.prompts.at(-1)
     const note = costNote(t)
     const v = view(t.total.wh, last?.wh ?? 0, ml(whLastMinute(t, Date.now())), t.total.usd, last?.usd ?? 0, note)
-    status.text = `$(flame) ${fmtMl(ml(v.wh))} · ${fmtWh(v.wh)} · ${fmtCo2(co2(v.wh))} CO2 · ${fmtUsd(v.usd)}`
-    status.tooltip = `Token Footprint: Copilot Chat usage since this window opened. Cost ${note}.`
+    const on = !!logPath()
+    status.text = on ? `$(flame) ${fmtMl(ml(v.wh))} · ${fmtWh(v.wh)} · ${fmtCo2(co2(v.wh))} CO2 · ${fmtUsd(v.usd)}` : '$(flame) Footprint: off'
+    status.tooltip = on
+      ? `Token Footprint: Copilot Chat usage since this window opened. Cost: ${note}.`
+      : 'Token Footprint: click to turn on Copilot Chat’s usage log.'
     status.show()
-    if (webview) webview.html = page(logPath() ? `${cardSvg(v, t.prompts)}${t.prompts.length ? '' : WAITING}` : SET_UP)
+    if (webview) webview.html = page(on ? `${cardSvg(v, t.prompts)}${t.prompts.length ? '' : WAITING}` : SET_UP)
   }
 
   context.subscriptions.push(
@@ -129,6 +132,10 @@ export function activate(context: vscode.ExtensionContext) {
 // text stay out of it: captureContent is left as it is (off by default).
 async function setUp(ourLog: string) {
   const logs = known()
+  if (!logs.length) {
+    void vscode.window.showWarningMessage('Token Footprint needs GitHub Copilot Chat, which isn’t installed or enabled in this VS Code.')
+    return
+  }
   const busy = logs.map(l => config(l.section)).find(c => c.get('enabled') && c.get('exporterType') !== 'file' && !c.get('outfile'))
   if (busy) {
     const pick = await vscode.window.showWarningMessage(
@@ -139,9 +146,14 @@ async function setUp(ourLog: string) {
     if (pick !== 'Switch to file') return
   }
   fs.mkdirSync(path.dirname(ourLog), { recursive: true })
-  for (const l of logs)
-    for (const [key, value] of Object.entries({ enabled: true, ...l.file, outfile: ourLog }))
-      await config(l.section).update(key, value, vscode.ConfigurationTarget.Global)
+  try {
+    for (const l of logs)
+      for (const [key, value] of Object.entries({ enabled: true, ...l.file, outfile: ourLog }))
+        await config(l.section).update(key, value, vscode.ConfigurationTarget.Global)
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Token Footprint couldn’t change Copilot’s usage log settings: ${error instanceof Error ? error.message : error}`)
+    return
+  }
   // An organization's policy outranks user settings, and Copilot reads the setting it wins.
   if (logs.some(l => config(l.section).get<string>('outfile') !== ourLog)) {
     void vscode.window.showWarningMessage('Your organization manages Copilot’s telemetry settings, so Token Footprint can’t turn on the usage log.')

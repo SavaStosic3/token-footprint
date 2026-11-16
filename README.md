@@ -25,7 +25,7 @@ mkdir -p ~/.copilot/extensions/token-footprint && curl -fsSL -o ~/.copilot/exten
 Windows (PowerShell):
 
 ```powershell
-New-Item -ItemType Directory -Force "$HOME\.copilot\extensions\token-footprint" | Out-Null; Invoke-WebRequest https://github.com/SavaStosic3/token-footprint/releases/latest/download/token-footprint-copilot-app.mjs -OutFile "$HOME\.copilot\extensions\token-footprint\extension.mjs"
+New-Item -ItemType Directory -Force "$HOME\.copilot\extensions\token-footprint" | Out-Null; Invoke-WebRequest -UseBasicParsing https://github.com/SavaStosic3/token-footprint/releases/latest/download/token-footprint-copilot-app.mjs -OutFile "$HOME\.copilot\extensions\token-footprint\extension.mjs"
 ```
 
 Then click **New** in the app. The Footprint panel opens beside the session.
@@ -67,7 +67,7 @@ Show the user each command and get their OK before running it. If a download or 
    Windows (PowerShell):
 
    ```powershell
-   Invoke-WebRequest https://github.com/SavaStosic3/token-footprint/releases/latest/download/token-footprint.vsix -OutFile "$env:TEMP\token-footprint.vsix"; code --install-extension "$env:TEMP\token-footprint.vsix"
+   Invoke-WebRequest -UseBasicParsing https://github.com/SavaStosic3/token-footprint/releases/latest/download/token-footprint.vsix -OutFile "$env:TEMP\token-footprint.vsix"; code --install-extension "$env:TEMP\token-footprint.vsix"
    ```
 
    If `code` isn't found on macOS, use `"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"` instead.
@@ -98,7 +98,7 @@ Show the user each command and get their OK before running it. If a download or 
 ## Good to know
 
 - **Privacy:** nothing leaves your computer. In VS Code, Token Footprint turns on Copilot Chat's local usage log, which holds model names and token counts but no prompt or reply text. If your company manages Copilot's telemetry settings, that may be blocked.
-- **Cost:** what Copilot charges, in AI credits at $0.01 each, when Copilot reports it. Otherwise it's the model's API list price, and models without a listed price count as $0.
+- **Cost:** what Copilot charges, in AI credits at $0.01 each, when Copilot reports it. Otherwise it's the model's API list price. Models without a listed price count as $0, and the panel then says "some models have no price".
 - **Update:** in VS Code and the Copilot app, install again. In Claude Code, run `claude plugin update token-footprint@token-footprint`.
 - **Uninstall:**
   - **VS Code:** uninstall the extension, then remove the `chat.agentHost.otel.*` and `github.copilot.chat.otel.*` settings it added.

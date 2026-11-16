@@ -7,6 +7,7 @@ import {
   COST_COLOR,
   ENERGY,
   ENERGY_COLOR,
+  NO_PRICE,
   WATER,
   WATER_COLOR,
   WH_PER_TOKEN,
@@ -139,7 +140,7 @@ export const register: Register = on => {
     const sum = await read($, total)
     const list = await read($, prompts)
     const now = await read($, live)
-    const v = view(sum.wh + now.pendingWh, (list.at(-1)?.wh ?? 0) + now.pendingWh, now.mlPerMin, sum.usd ?? 0, list.at(-1)?.usd ?? 0)
+    const v = view(sum.wh + now.pendingWh, (list.at(-1)?.wh ?? 0) + now.pendingWh, now.mlPerMin, sum.usd ?? 0, list.at(-1)?.usd ?? 0, sum.unpriced ? NO_PRICE : undefined)
     const t = v.text
 
     if (e.surface === 'terminal') {
@@ -211,7 +212,7 @@ export const register: Register = on => {
           </Box>
           <Text>
             <Text bold color={COST_COLOR}>{t.cost}</Text>
-            <Text dimColor>  {t.costSub}</Text>
+            <Text dimColor>  {t.costSub}{sum.unpriced ? ` · ${NO_PRICE}` : ''}</Text>
           </Text>
           <Box flexDirection="column">
             <Text dimColor>{t.prompt}</Text>

@@ -1,8 +1,8 @@
 import type { Prompt, Usage } from '../types'
 
 // Everything that does not depend on the host: the estimates, the prices, the
-// text and the card. The Claude Code plugin (hooks/) and the VS Code extension
-// (vscode/) both draw from here.
+// text and the card. The Claude Code plugin (hooks/), the VS Code extension
+// (vscode/) and the GitHub Copilot app canvas (copilot-app/) all draw from here.
 
 // One model request's token counts, in Anthropic's shape: input_tokens excludes
 // the cache reads and writes, which are counted on their own.
@@ -42,13 +42,13 @@ const usd = (input: number, output: number, cacheWrite: number, cacheRead: numbe
 // Gemini's launch prices double on 2026-12-01. Implicit caching only, so writes bill as plain input.
 const GEMINI = Date.now() < Date.UTC(2026, 11, 1) ? usd(2, 10, 2, 0.1) : usd(4, 20, 4, 0.2)
 // [model, price, price once a request's prompt passes LONG_PROMPT tokens]
+// Copilot spells versions with dots (claude-opus-5.5), Claude Code with dashes.
 const PRICES: [RegExp, Price, Price?][] = [
   [/opus-5[.-]5/i, usd(4, 20, 5, 0.2)],
   [/sonnet-5[.-]5/i, usd(2, 10, 2.5, 0.1)],
   [/gpt-6[.-]1-sol/i, usd(2, 10, 2.5, 0.1), usd(4, 15, 5, 0.2)],
   [/gpt-6[.-]1-terra/i, usd(1, 5, 1.25, 0.05), usd(2, 7.5, 2.5, 0.1)],
   [/gemini-4-argon/i, GEMINI],
-  // Copilot spells versions with dots (claude-opus-5.5), Claude Code with dashes.
   // Google lists Gemini 4 Carbon; match a 5 too in case that is the id in use.
   [/gemini-[45]-carbon/i, GEMINI],
 ]
@@ -87,6 +87,8 @@ export const WATER_COLOR = '#38bdf8'
 export const ENERGY_COLOR = '#f59e0b'
 export const CARBON_COLOR = '#a78bfa'
 export const COST_COLOR = '#34d399'
+// Shown beside a cost that leaves out calls to models with no price on file.
+export const NO_PRICE = 'some models have no price'
 export const ZERO: Usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, wh: 0, usd: 0 }
 
 export const scaleOf = (model: string) => MODEL_SCALE.find(([re]) => re.test(model))?.[1] ?? DEFAULT_SCALE
@@ -109,7 +111,7 @@ export function addUsage<T extends Usage>(sum: T, u: TokenUsage): T {
           u.cache_creation_input_tokens * p.cacheWrite +
           u.cache_read_input_tokens * p.cacheRead) /
         1e6
-      : 0)
+      : undefined)
   return {
     ...sum,
     input: sum.input + u.input_tokens,
@@ -118,7 +120,8 @@ export function addUsage<T extends Usage>(sum: T, u: TokenUsage): T {
     cacheWrite: sum.cacheWrite + u.cache_creation_input_tokens,
     wh: sum.wh + wh,
     // Totals saved before cost existed have no usd.
-    usd: (sum.usd ?? 0) + cost,
+    usd: (sum.usd ?? 0) + (cost ?? 0),
+    ...(cost === undefined ? { unpriced: (sum.unpriced ?? 0) + 1 } : {}),
   }
 }
 

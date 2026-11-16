@@ -1,4 +1,4 @@
-import { ZERO, addUsage, type TokenUsage } from '../../core/footprint.ts'
+import { NO_PRICE, ZERO, addUsage, type TokenUsage } from '../../core/footprint.ts'
 import type { Prompt, Usage } from '../../types'
 
 // One model call read from Copilot Chat's OpenTelemetry file export.
@@ -22,7 +22,8 @@ export function parseLine(line: string): Call | undefined {
   const model = a['gen_ai.response.model'] ?? a['gen_ai.request.model']
   if (typeof model !== 'string' || a['gen_ai.usage.input_tokens'] === undefined) return undefined
   const read = num(a['gen_ai.usage.cache_read.input_tokens'])
-  const write = num(a['gen_ai.usage.cache_creation.input_tokens'])
+  // The Copilot Chat extension says cache_creation, the shared Copilot runtime cache_write.
+  const write = num(a['gen_ai.usage.cache_creation.input_tokens'] ?? a['gen_ai.usage.cache_write.input_tokens'])
   // Copilot's input_tokens is the whole prompt, cache reads and writes included.
   const fresh = Math.max(0, num(a['gen_ai.usage.input_tokens']) - read - write)
   // Older Copilot builds wrote the SDK's span object as-is, context under _spanContext.
@@ -67,7 +68,7 @@ export function tally(t: Tally, c: Call): Tally {
 
 // Where the cost total comes from, for the card.
 export const costNote = (t: Tally) =>
-  t.billed && t.estimated ? 'Copilot credits + API price' : t.billed ? 'charged in Copilot credits' : 'at API list price'
+  t.total.unpriced ? NO_PRICE : t.billed && t.estimated ? 'Copilot credits + API price' : t.billed ? 'charged in Copilot credits' : 'at API list price'
 
 // Wh burned in the minute before `now`.
 export const whLastMinute = (t: Tally, now: number) => t.recent.filter(([end]) => now - end < 60_000).reduce((s, [, wh]) => s + wh, 0)
