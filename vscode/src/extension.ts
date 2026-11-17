@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as vscode from 'vscode'
 
 import { CARBON, ENERGY, WATER, cardSvg, co2, fmtCo2, fmtMl, fmtUsd, fmtWh, ml, passed, view } from '../../core/footprint.ts'
+import { copilotHome, projectOf, projectTotal, scan } from '../../copilot-app/src/sessions.ts'
 import { costNote, parseLine, start, tally, whLastMinute, type Tally } from './copilotLog.ts'
 
 // Copilot Chat runs a request in one of two places, each with its own usage log
@@ -26,6 +27,13 @@ export function activate(context: vscode.ExtensionContext) {
   const logPath = () => fromEnv() || LOGS.map(l => config(l.section).get<string>('outfile')).find(Boolean) || ''
 
   let t: Tally = start()
+  // The project total: every session Copilot's agent host saved for this folder or
+  // its repository. Older VS Code saves none, and then there is no project line.
+  const home = copilotHome()
+  const ledgerFile = path.join(context.globalStorageUri.fsPath, 'ledger.json')
+  const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  const mine = folder ? projectOf(folder, home) : undefined
+  let project: { wh: number; usd: number } | undefined
   let webview: vscode.Webview | undefined
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
   status.command = `${VIEW}.focus`
@@ -34,7 +42,7 @@ export function activate(context: vscode.ExtensionContext) {
   const render = () => {
     const last = t.prompts.at(-1)
     const note = costNote(t)
-    const v = view(t.total.wh, last?.wh ?? 0, ml(whLastMinute(t, Date.now())), t.total.usd, last?.usd ?? 0, note)
+    const v = view(t.total.wh, last?.wh ?? 0, ml(whLastMinute(t, Date.now())), t.total.usd, last?.usd ?? 0, note, project)
     const on = !!logPath()
     status.text = on ? `$(flame) ${fmtMl(ml(v.wh))} · ${fmtWh(v.wh)} · ${fmtCo2(co2(v.wh))} CO2 · ${fmtUsd(v.usd)}` : '$(flame) Footprint: off'
     status.tooltip = on
@@ -56,6 +64,19 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('tokenFootprint.setUp', () => setUp(ourLog)),
     vscode.commands.registerCommand('tokenFootprint.turnOff', () => turnOff(ourLog)),
   )
+
+  // The agent host saves a call a moment after the log has it: look once the turn has likely settled.
+  let rescanTimer: ReturnType<typeof setTimeout> | undefined
+  const rescan = () => {
+    if (!mine) return
+    project = projectTotal(scan(home, ledgerFile), mine)
+    render()
+  }
+  const rescanSoon = () => {
+    clearTimeout(rescanTimer)
+    rescanTimer = setTimeout(rescan, 3000)
+  }
+  context.subscriptions.push({ dispose: () => clearTimeout(rescanTimer) })
 
   // Read what Copilot appends to the log. The agent host serves every window and
   // marks no window on its records, so each window counts all of them.
@@ -91,6 +112,7 @@ export function activate(context: vscode.ExtensionContext) {
     ].filter(Boolean)
     if (news.length) vscode.window.setStatusBarMessage(`Footprint just passed ${news.map(m => m![2]).join(' · ')}`, 6000)
     render()
+    rescanSoon()
   }
   const watch = () => {
     if (file) fs.unwatchFile(file)
@@ -118,6 +140,7 @@ export function activate(context: vscode.ExtensionContext) {
   }, 5000)
   context.subscriptions.push({ dispose: () => clearInterval(timer) })
   render()
+  rescan()
 
   if (!logPath() && !context.globalState.get('setUpAsked')) {
     void context.globalState.update('setUpAsked', true)

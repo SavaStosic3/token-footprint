@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 import { CARBON, ENERGY, WATER, addUsage, co2, gauge, ml, view } from '../core/footprint'
 import { pack } from './register'
@@ -154,6 +154,32 @@ test('a model step lands in the prompt and the pane draws it on both surfaces', 
     // Emoji widths differ between terminals and shift every cell drawn after one.
     if (surface === 'terminal') expect(/\p{Extended_Pictographic}/u.test(drawn)).toBe(false)
     else expect(drawn).toMatch(/<svg/)
+    await ui.unmount()
+  }
+})
+
+test('the project total carries over from earlier sessions and grows with this one', async ($, on) => {
+  const root = '/work/shop'
+  on('session.root', () => ({ value: root }))
+  // An earlier session in this project left 10 Wh and $1.50 behind.
+  mock.store(on, { [`project:${root}`]: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, wh: 10, usd: 1.5 } })
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('turn.step', async function* (_$, e) {
+    yield { kind: 'text' as const, index: 0, text: 'hi' }
+    return { turnId: e.turnId, index: e.index, answer: 'hi', toolUses: [], stopReason: 'end_turn' as const, usage: usage('claude-sonnet-5-5') }
+  })
+  await $.turn.start({ text: 'go', turnId: 't1' })
+  const step = $.turn.step({ turnId: 't1', index: 0, model: 'claude-sonnet-5-5', messageCount: 1 })
+  for await (const _ of step) {
+  }
+  await step.result
+
+  // 10 Wh + this step's 0.7 Wh, and $1.50 + $0.013. The pane draws what was written back to the store.
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ plugin: 'token-footprint', surface, component: 'Pane', requestId: 'token-footprint', props: PANE_PROPS })
+    const drawn = JSON.stringify(await ui.drawn())
+    expect(drawn).toMatch(/project +44\.9 mL · 10\.7 Wh · 3\.7[45] g CO2 · \$1\.51 USD/)
+    if (surface === 'desktop') expect(drawn).toMatch(/PROJECT TOTAL/)
     await ui.unmount()
   }
 })

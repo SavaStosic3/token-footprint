@@ -24,7 +24,7 @@ import {
   scaleOf,
   view,
 } from '../core/footprint'
-import type { Live, Prompt } from '../types'
+import type { Live, Prompt, Usage } from '../types'
 
 // Streamed text counts live at ~4 characters a token until the step's real usage replaces it.
 const CHARS_PER_TOKEN = 4
@@ -35,6 +35,11 @@ const PANE = 'token-footprint'
 const total = atom({ plugin: 'token-footprint', key: 'total' } as const, ZERO)
 const prompts = atom({ plugin: 'token-footprint', key: 'prompts' } as const, [])
 const live = atom({ plugin: 'token-footprint', key: 'live' } as const, { pendingWh: 0, mlPerMin: 0 })
+// The project's total across sessions: mirrored here to draw, kept in $.store under the session's project root.
+const project = atom({ plugin: 'token-footprint', key: 'project' } as const, ZERO)
+// What the project bookkeeping needs of the engine.
+type Stores = { session: { root: () => Promise<string> }; store: { get: (key: string) => Promise<unknown>; set: (key: string, value: unknown) => Promise<void> } }
+const projectKey = async ($: Stores) => `project:${await $.session.root()}`
 
 // Streams in flight, kept in the module: a reload drops them with the streams they tracked.
 let pendingWh = 0
@@ -48,7 +53,7 @@ const spark = (list: Prompt[]) => {
   return shown.map(p => '▁▂▃▄▅▆▇█'[Math.min(7, Math.floor((p.wh / max) * 8))]).join('')
 }
 // Rows the full terminal view needs; with less room the compact one draws instead.
-const FULL_ROWS = 18
+const FULL_ROWS = 19
 type Span = { text: string; color?: string; bold?: boolean }
 // Packs parts (runs of spans) into as few lines as fit the width, joined by " · ".
 export function pack(parts: Span[][], width: number): Span[][] {
@@ -66,6 +71,11 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'footprint', description: 'Show the water, electricity, CO2 and cost this session has used' })
     void $.ui.open({ id: PANE, title: 'Footprint' })
+    // Pick up what earlier sessions in this folder used. The pane draws without it if the store can't be read.
+    try {
+      const saved = await $.store.get(await projectKey($))
+      if (saved) await update($, project, () => saved as Usage)
+    } catch {}
 
     // Turn the burn of the streams in flight into a usage rate, once a second.
     let lastBurned = burnedWh
@@ -122,6 +132,14 @@ export const register: Register = on => {
       })
       const before = (await read($, total)).wh
       const sum = await update($, total, s => addUsage(s, usage))
+      // ponytail: read, add, write. Two sessions in one folder finishing a step at the same moment can
+      // drop one step from the project total; lock the store if that ever matters.
+      try {
+        const key = await projectKey($)
+        const kept = addUsage(((await $.store.get(key)) as Usage | undefined) ?? ZERO, usage)
+        await $.store.set(key, kept)
+        await update($, project, () => kept)
+      } catch {}
       const water = passed(WATER, ml(before), ml(sum.wh))
       const power = passed(ENERGY, before, sum.wh)
       const carbon = passed(CARBON, co2(before), co2(sum.wh))
@@ -140,7 +158,16 @@ export const register: Register = on => {
     const sum = await read($, total)
     const list = await read($, prompts)
     const now = await read($, live)
-    const v = view(sum.wh + now.pendingWh, (list.at(-1)?.wh ?? 0) + now.pendingWh, now.mlPerMin, sum.usd ?? 0, list.at(-1)?.usd ?? 0, sum.unpriced ? NO_PRICE : undefined)
+    const kept = await read($, project)
+    const v = view(
+      sum.wh + now.pendingWh,
+      (list.at(-1)?.wh ?? 0) + now.pendingWh,
+      now.mlPerMin,
+      sum.usd ?? 0,
+      list.at(-1)?.usd ?? 0,
+      sum.unpriced ? NO_PRICE : undefined,
+      kept.wh > 0 ? { wh: kept.wh + now.pendingWh, usd: kept.usd ?? 0 } : undefined,
+    )
     const t = v.text
 
     if (e.surface === 'terminal') {
@@ -160,6 +187,7 @@ export const register: Register = on => {
             [head(t.cost, COST_COLOR), { text: ` ${t.costSub}` }],
             [{ text: flat(t.prompt) }],
             [rate],
+            ...(t.project ? [[{ text: flat(t.project) }]] : []),
           ],
           bodyColumns,
         )
@@ -217,6 +245,7 @@ export const register: Register = on => {
           <Box flexDirection="column">
             <Text dimColor>{t.prompt}</Text>
             {v.mlPerMin > 0 ? <Text color={WATER_COLOR}>{t.rate}</Text> : <Text dimColor>{t.rate}</Text>}
+            {t.project && <Text dimColor>{t.project}</Text>}
             {list.length > 1 && (
               <Text>
                 <Text dimColor>per prompt  </Text>
@@ -229,6 +258,6 @@ export const register: Register = on => {
     }
 
     const { Svg } = $.ui.resolve(e)
-    return <Svg source={cardSvg(v, list)} alt={Object.values(t).join('. ')} />
+    return <Svg source={cardSvg(v, list)} alt={Object.values(t).filter(Boolean).join('. ')} />
   })
 }

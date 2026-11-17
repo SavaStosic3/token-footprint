@@ -17,6 +17,7 @@ export type Live = { pendingWh: number; mlPerMin: number }
 
 declare module 'claude-code' {
   interface PluginState {
-    'token-footprint': { total: Usage; prompts: Prompt[]; live: Live }
+    // project is the running total of every session in this session's project root, kept in $.store.
+    'token-footprint': { total: Usage; prompts: Prompt[]; live: Live; project: Usage }
   }
 }
