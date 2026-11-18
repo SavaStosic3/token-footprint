@@ -31,7 +31,7 @@ export const WH_PER_TOKEN = { output: 0.0005, input: 0.0001, cacheWrite: 0.00012
 const MODEL_SCALE: [RegExp, number][] = [
   [/haiku|luna|mai-code|flash-lite|-mini\b|-nano\b/i, 0.33],
   [/sonnet|terra|hydrogen|flash/i, 1],
-  [/fable|astra/i, 3.33],
+  [/fable|mythos|astra/i, 3.33],
   [/opus|-sol\b|argon|carbon/i, 1.67],
 ]
 const DEFAULT_SCALE = 1.67
@@ -56,7 +56,14 @@ const LONG_PROMPT = 272_000
 // [model, price, long-prompt price, long-prompt threshold when it isn't LONG_PROMPT]. First match wins.
 // Copilot spells versions with dots (claude-opus-5.5), Claude Code with dashes.
 const PRICES: [RegExp, Price, Price?, number?][] = [
-  [/fable-5[.-]2/i, usd(8, 40, 10, 0.2)],
+  [/(?:fable|mythos)-5[.-]1\b/i, usd(10, 50, 12.5, 0.25)],
+  [/(?:fable|mythos)-5(?=$|[-@:]\d{8}\b)/i, usd(10, 50, 12.5, 1)],
+  [/opus-4[.-][5-8]\b/i, usd(5, 25, 6.25, 0.5)],
+  [/opus-4(?:[.-]1)?(?=$|[-@:]\d{8}\b)/i, usd(15, 75, 18.75, 1.5)],
+  [/sonnet-4[.-]6\b/i, usd(3, 15, 3.75, 0.3)],
+  [/sonnet-4(?:[.-]5)?(?=$|[-@:]\d{8}\b)/i, usd(3, 15, 3.75, 0.3), usd(6, 22.5, 7.5, 0.6), 200_000],
+  [/haiku-4[.-]5\b/i, usd(1, 5, 1.25, 0.1)],
+  [/(?:fable|mythos)-5[.-]2\b/i, usd(8, 40, 10, 0.2)],
   [/opus-5[.-]5/i, usd(4, 20, 5, 0.2)],
   [/opus-5(?![.-]\d)/i, usd(5, 25, 6.25, 0.5)],
   [/sonnet-5[.-]5/i, usd(2, 10, 2.5, 0.1)],

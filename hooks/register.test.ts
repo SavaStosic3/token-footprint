@@ -70,11 +70,17 @@ test('cost follows each model\'s published price', async () => {
   expect(micro({ ...usage('claude-haiku-5-5'), input_tokens: 100000 })).toBe(100000 * 0.5 + 2500 + 500)
   expect(micro(usage('gpt-6-luna'))).toBe(100 + 500 + 100)
   expect(micro(usage('mai-code-1.1-flash'))).toBe(200 + 1200 + 200)
+  for (const [model, expected] of [
+    ['claude-mythos-5-2', 50000], ['claude-fable-5.1', 62500], ['claude-mythos-5', 70000],
+    ['claude-opus-4-8', 35000], ['claude-opus-4-20250514', 105000],
+    ['claude-sonnet-4.6', 21000], ['claude-haiku-4-5-20251001', 7000],
+  ] as const) expect(micro(usage(model))).toBe(expected)
+  expect(micro({ ...usage('claude-sonnet-4-5'), input_tokens: 190001 })).toBe(190001 * 6 + 22500 + 6000)
   // No published price on file: no cost, and the call is counted as unpriced so the pane can say so.
-  expect(micro(usage('claude-haiku-4-5'))).toBe(0)
-  expect(addUsage(ZERO, usage('claude-haiku-4-5')).unpriced).toBe(1)
+  expect(micro(usage('unknown-model'))).toBe(0)
+  expect(addUsage(ZERO, usage('unknown-model')).unpriced).toBe(1)
   expect(addUsage(ZERO, usage('claude-sonnet-5-5')).unpriced).toBe(undefined)
-  expect(addUsage(ZERO, { ...usage('claude-haiku-4-5'), usd: 0.5 }).unpriced).toBe(undefined)
+  expect(addUsage(ZERO, { ...usage('unknown-model'), usd: 0.5 }).unpriced).toBe(undefined)
   // A total saved before cost existed still adds up.
   const { usd: _, ...old } = ZERO
   expect(micro(usage('claude-sonnet-5-5'), old as typeof ZERO)).toBe(13000)
