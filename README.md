@@ -113,12 +113,12 @@ Show the user each command and get their OK before running it. If a download or 
 
 These are estimates, not measurements. Every constant and price is in [`core/footprint.ts`](core/footprint.ts).
 
-- **Electricity:** about 0.5 mWh per output token for a Sonnet-class model, the mid-range of Epoch AI's estimates. That puts a typical reply near the ~0.3 Wh per query that Google, OpenAI and Microsoft Research report. Input and cached tokens count for less. Models count by size: small ones (Haiku, GPT Luna, MAI-Code Flash) ×0.33, mid-size ones (Sonnet, GPT Terra, Gemini Hydrogen and Flash) ×1, large ones (Opus, GPT Sol, Gemini Argon and Carbon, and any model not listed) ×1.67, and Fable ×3.33.
+- **Electricity:** about 0.5 mWh per output token for a Sonnet-class model, the mid-range of Epoch AI's estimates. That puts a typical reply near the ~0.3 Wh per query that Google, OpenAI and Microsoft Research report. Input and cached tokens count for less. Models count by size: small ones (Haiku, GPT Luna, MAI-Code Flash) ×0.33, mid-size ones (Sonnet, GPT Terra, Gemini Hydrogen and Flash) ×1, large ones (Opus, GPT Sol, Gemini Argon and Carbon, and any model not listed) ×1.67, and Fable, Mythos and GPT Astra ×3.33.
 - **Water:** 4.2 mL per Wh: data-center cooling (from Google's Gemini disclosure) plus the water used to generate the electricity (US grid average).
 - **CO₂:** 0.35 g per Wh, the US grid average (EPA eGRID 2023), compared with a typical car at about 400 g per mile.
 - **Cost:** Copilot's own charge when it reports one ([AI credits](https://docs.github.com/en/copilot/concepts/billing-and-usage/individuals/billing)). Otherwise the model's published API price, checked 2026-11-15, for:
-  - Claude Fable 5.2, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5 and Haiku 5.5 ([Anthropic](https://platform.claude.com/docs/en/about-claude/pricing))
-  - GPT-6.1 Sol and Terra, GPT-6 Sol and Luna ([OpenAI](https://developers.openai.com/api/docs/pricing))
+  - Claude Fable and Mythos (5, 5.1, 5.2), Opus (4, 4.1, 4.5–4.8, 5, 5.5), Sonnet (4, 4.5, 4.6, 5, 5.5) and Haiku (4.5, 5.5) ([Anthropic](https://platform.claude.com/docs/en/about-claude/pricing))
+  - GPT-6.2 Astra and Sol, GPT-6.1 Sol and Terra, GPT-6 Astra, Sol and Luna ([OpenAI](https://developers.openai.com/api/docs/pricing))
   - Gemini 4 Argon, Carbon and Hydrogen, and Gemini 3.8 Flash ([Google](https://aistudio.google.com/docs/pricing))
   - MAI-Code-1.1-Flash ([GitHub's Copilot rate](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing))
 

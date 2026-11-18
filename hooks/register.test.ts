@@ -47,6 +47,16 @@ test('cost follows each model\'s published price', async () => {
   expect(micro(usage('claude-sonnet-5-5'))).toBe(2000 + 10000 + 1000)
   expect(micro(usage('claude-opus-5-5'))).toBe(4000 + 20000 + 2000)
   expect(micro(usage('gpt-6.1-terra'))).toBe(1000 + 5000 + 500)
+  // Include fresh input, output, cache reads and 30-minute cache writes.
+  for (const [model, input, output, read, write] of [
+    ['gpt-6.2-astra', 8, 40, 0.4, 10],
+    ['gpt-6.2-sol', 2, 10, 0.1, 2.5],
+    ['gpt-6-astra', 10, 50, 1, 12.5],
+  ] as const) {
+    const atLimit = { ...usage(model), input_tokens: 261000, cache_creation_input_tokens: 1000 }
+    expect(micro(atLimit)).toBe(261000 * input + 1000 * output + 10000 * read + 1000 * write)
+    expect(micro({ ...atLimit, input_tokens: 261001 })).toBe(261001 * 2 * input + 1500 * output + 20000 * read + 2000 * write)
+  }
   // Past 272K prompt tokens GPT-6.1 Sol bills the whole request at its long-context rate.
   expect(micro({ ...usage('gpt-6.1-sol'), input_tokens: 300000 })).toBe(300000 * 4 + 15000 + 2000)
   expect(micro(usage('gemini-4-argon'))).toBeGreaterThan(0)
@@ -60,11 +70,17 @@ test('cost follows each model\'s published price', async () => {
   expect(micro({ ...usage('claude-haiku-5-5'), input_tokens: 100000 })).toBe(100000 * 0.5 + 2500 + 500)
   expect(micro(usage('gpt-6-luna'))).toBe(100 + 500 + 100)
   expect(micro(usage('mai-code-1.1-flash'))).toBe(200 + 1200 + 200)
+  for (const [model, expected] of [
+    ['claude-mythos-5-2', 50000], ['claude-fable-5.1', 62500], ['claude-mythos-5', 70000],
+    ['claude-opus-4-8', 35000], ['claude-opus-4-20250514', 105000],
+    ['claude-sonnet-4.6', 21000], ['claude-haiku-4-5-20251001', 7000],
+  ] as const) expect(micro(usage(model))).toBe(expected)
+  expect(micro({ ...usage('claude-sonnet-4-5'), input_tokens: 190001 })).toBe(190001 * 6 + 22500 + 6000)
   // No published price on file: no cost, and the call is counted as unpriced so the pane can say so.
-  expect(micro(usage('claude-haiku-4-5'))).toBe(0)
-  expect(addUsage(ZERO, usage('claude-haiku-4-5')).unpriced).toBe(1)
+  expect(micro(usage('unknown-model'))).toBe(0)
+  expect(addUsage(ZERO, usage('unknown-model')).unpriced).toBe(1)
   expect(addUsage(ZERO, usage('claude-sonnet-5-5')).unpriced).toBe(undefined)
-  expect(addUsage(ZERO, { ...usage('claude-haiku-4-5'), usd: 0.5 }).unpriced).toBe(undefined)
+  expect(addUsage(ZERO, { ...usage('unknown-model'), usd: 0.5 }).unpriced).toBe(undefined)
   // A total saved before cost existed still adds up.
   const { usd: _, ...old } = ZERO
   expect(micro(usage('claude-sonnet-5-5'), old as typeof ZERO)).toBe(13000)
