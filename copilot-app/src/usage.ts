@@ -1,6 +1,6 @@
 import type { TokenUsage } from '../../core/footprint.ts'
 
-// The fields of the Copilot runtime's `assistant.usage` event this canvas reads.
+// The fields of one model call's usage, as the Copilot runtime records it, that this reads.
 export type UsageData = {
   model: string
   inputTokens?: number

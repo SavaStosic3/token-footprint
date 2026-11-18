@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "types": ["node", "vscode"]
   },
-  "include": ["src", "../core", "../types"]
+  "include": ["src", "../core", "../types", "../copilot-app/src/sessions.ts", "../copilot-app/src/usage.ts"]
 }

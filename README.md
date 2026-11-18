@@ -2,7 +2,7 @@
 
 See the water, electricity, CO₂ and cost of your AI coding prompts, estimated from their tokens. Works with **GitHub Copilot Chat in VS Code**, the **GitHub Copilot app** and **Claude Code**.
 
-A Footprint panel shows the session's totals, each with an everyday comparison (teaspoons of water, phone charges, metres of driving), plus the latest prompt and a per-prompt graph.
+A Footprint panel shows the session's totals, each with an everyday comparison (teaspoons of water, phone charges, metres of driving), plus the latest prompt, a per-prompt graph and the project's running total.
 
 ## Install
 
@@ -99,6 +99,10 @@ Show the user each command and get their OK before running it. If a download or 
 
 - **Privacy:** nothing leaves your computer. In VS Code, Token Footprint turns on Copilot Chat's local usage log, which holds model names and token counts but no prompt or reply text. If your company manages Copilot's telemetry settings, that may be blocked.
 - **Cost:** what Copilot charges, in AI credits at $0.01 each, when Copilot reports it. Otherwise it's the model's API list price. Models without a listed price count as $0, and the panel then says "some models have no price".
+- **Project total:** everything the project has used across sessions, this one included.
+  - **Copilot (VS Code and the app):** adds up the sessions Copilot saved for the same repository or folder, including ones from before you installed this. Both count toward the same project. In VS Code it needs version 1.146 or later. Chats in the app that aren't in a project have no project total.
+  - **Claude Code:** counts from the day you install version 0.4.0, per project folder. It's separate from the Copilot total.
+- **Sessions keep their totals:** in the Copilot app, a session's numbers come from what Copilot saved for it, so they survive closing the panel or the app, and they include subagents.
 - **Update:** in VS Code and the Copilot app, install again. In Claude Code, run `claude plugin update token-footprint@token-footprint`.
 - **Uninstall:**
   - **VS Code:** run **Token Footprint: Turn off Copilot Chat's usage log** from the Command Palette, then uninstall the extension.

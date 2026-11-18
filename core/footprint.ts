@@ -172,8 +172,17 @@ export const passed = (steps: Milestone[], before: number, after: number) => ste
 
 // Everything a drawing needs. Its text has no emoji: terminals disagree on their
 // width, which shifts every cell drawn after one. The desktop card carries the icons.
-// costNote says where the cost comes from, beside it on the card.
-export function view(wh: number, promptWh: number, mlPerMin: number, usd: number, promptUsd: number, costNote = 'at API list price') {
+// costNote says where the cost comes from, beside it on the card. project is the
+// running total for the project the session belongs to, this session included.
+export function view(
+  wh: number,
+  promptWh: number,
+  mlPerMin: number,
+  usd: number,
+  promptUsd: number,
+  costNote = 'at API list price',
+  project?: { wh: number; usd: number },
+) {
   const water = gauge(ml(wh), WATER)
   const power = gauge(wh, ENERGY)
   const carbon = gauge(co2(wh), CARBON)
@@ -203,6 +212,9 @@ export function view(wh: number, promptWh: number, mlPerMin: number, usd: number
       costNote,
       prompt: `this prompt  ${fmtMl(ml(promptWh))} · ${fmtWh(promptWh)} · ${fmtCo2(co2(promptWh))} CO2`,
       rate: `usage rate  ${rate}`,
+      ...(project
+        ? { project: `project  ${fmtMl(ml(project.wh))} · ${fmtWh(project.wh)} · ${fmtCo2(co2(project.wh))} CO2 · ${fmtUsd(project.usd)}` }
+        : {}),
     },
   }
 }
@@ -219,10 +231,12 @@ export function cardSvg(v: View, list: Prompt[]): string {
 <text x="352" y="${y + 21}" font-size="10" fill="#64748b" text-anchor="end">${next}</text>
 <text x="352" y="${y + 45}" font-size="12" fill="#cbd5e1" text-anchor="end">${sub}</text>`
   }
-  const chip = (x: number, width: number, label: string, value: string, color: string) =>
-    `<rect x="${x}" y="280" width="${width}" height="50" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#1e2a44"/>
-<text x="${x + 14}" y="299" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#64748b">${label}</text>
-<text x="${x + 14}" y="319" font-size="13" font-weight="600" fill="${color}" style="font-variant-numeric: tabular-nums">${value}</text>`
+  const chip = (x: number, y: number, width: number, label: string, value: string, color: string) =>
+    `<rect x="${x}" y="${y}" width="${width}" height="50" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#1e2a44"/>
+<text x="${x + 14}" y="${y + 19}" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#64748b">${label}</text>
+<text x="${x + 14}" y="${y + 39}" font-size="13" font-weight="600" fill="${color}" style="font-variant-numeric: tabular-nums">${value}</text>`
+  // The project chip, when there is one, pushes the graph down a row.
+  const down = t.project ? 58 : 0
 
   // The last bar is the prompt in flight, so it grows with the stream.
   const values = [...list.slice(-30).map(p => p.wh).slice(0, -1), v.promptWh]
@@ -231,10 +245,10 @@ export function cardSvg(v: View, list: Prompt[]): string {
   const bars = values
     .map((wh, i) => {
       const barH = Math.max(2, (wh / max) * 36)
-      return `<rect x="${30 + i * 10.67 + 1}" y="${402 - barH}" width="8.67" height="${barH}" rx="2" fill="url(#bar)" opacity="${i === values.length - 1 ? 1 : 0.55}"/>`
+      return `<rect x="${30 + i * 10.67 + 1}" y="${402 + down - barH}" width="8.67" height="${barH}" rx="2" fill="url(#bar)" opacity="${i === values.length - 1 ? 1 : 0.55}"/>`
     })
     .join('')
-  const height = hasGraph ? 418 : 344
+  const height = (hasGraph ? 418 : 344) + down
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="380" height="${height}" viewBox="0 0 380 ${height}" font-family="ui-sans-serif, system-ui, 'Segoe UI', sans-serif">
 <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f1b2e"/><stop offset="1" stop-color="#0a1220"/></linearGradient>
@@ -244,13 +258,14 @@ ${row(14, WATER_COLOR, '💧 WATER', fmtMl(ml(v.wh)), `${t.waterSub} ${v.water.i
 ${row(80, ENERGY_COLOR, '⚡ ELECTRICITY', fmtWh(v.wh), `${t.energySub} ${v.power.icon}`, t.energyNext)}
 ${row(146, CARBON_COLOR, '💨 CO₂', fmtCo2(co2(v.wh)), `${t.carbonSub} 🚗`, t.carbonNext)}
 ${row(212, COST_COLOR, '💵 COST', fmtUsd(v.usd), t.costSub, t.costNote)}
-${chip(14, 230, 'THIS PROMPT', `${fmtMl(ml(v.promptWh))} · ${fmtWh(v.promptWh)} · ${fmtCo2(co2(v.promptWh))}`, '#e2e8f0')}
-${chip(256, 110, 'USAGE RATE', v.rate, v.mlPerMin > 0 ? '#7dd3fc' : '#64748b')}
+${chip(14, 280, 230, 'THIS PROMPT', `${fmtMl(ml(v.promptWh))} · ${fmtWh(v.promptWh)} · ${fmtCo2(co2(v.promptWh))}`, '#e2e8f0')}
+${chip(256, 280, 110, 'USAGE RATE', v.rate, v.mlPerMin > 0 ? '#7dd3fc' : '#64748b')}
+${t.project ? chip(14, 338, 352, 'PROJECT TOTAL', t.project.replace(/^project\s+/, '').replace(' CO2', ''), '#e2e8f0') : ''}
 ${
   hasGraph
-    ? `<text x="16" y="356" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#64748b">USAGE PER PROMPT</text>
-<text x="364" y="356" font-size="10" fill="#64748b" text-anchor="end">tallest ${fmtWh(max)}</text>${bars}
-<line x1="30" y1="402.5" x2="350" y2="402.5" stroke="#263247"/>`
+    ? `<text x="16" y="${356 + down}" font-size="9.5" font-weight="700" letter-spacing="1.5" fill="#64748b">USAGE PER PROMPT</text>
+<text x="364" y="${356 + down}" font-size="10" fill="#64748b" text-anchor="end">tallest ${fmtWh(max)}</text>${bars}
+<line x1="30" y1="${402.5 + down}" x2="350" y2="${402.5 + down}" stroke="#263247"/>`
     : ''
 }</svg>`
 }

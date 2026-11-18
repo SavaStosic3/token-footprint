@@ -1,25 +1,34 @@
 import { createServer, type ServerResponse } from 'node:http'
+import * as path from 'node:path'
 
 import { createCanvas, joinSession } from '@github/copilot-sdk/extension'
 
 import { cardSvg, ml, view } from '../../core/footprint.ts'
-import { costNote, start, tally, whLastMinute, type Tally } from '../../vscode/src/copilotLog.ts'
-import { usageOf } from './usage.ts'
+import { costNote, start, whLastMinute, type Tally } from '../../vscode/src/copilotLog.ts'
+import { copilotHome, followSession, projectTotal, scan, type Project } from './sessions.ts'
 
 // The Footprint canvas for the GitHub Copilot app: the session's water,
-// electricity, CO2 and cost, from each model call's usage event. The app shows
-// the page this extension serves on a loopback port in its side panel.
+// electricity, CO2 and cost, and the project's running total. The numbers come
+// from the events the app saves for each session, so they include subagents and
+// survive the panel, the session or the app being closed. The app shows the page
+// this extension serves on a loopback port in its side panel.
 // stdout carries the app's JSON-RPC: never console.log here.
 
 const CANVAS = 'footprint'
+const RESCAN_MS = 30_000
 
+const home = copilotHome()
+const ledgerFile = path.join(home, 'extensions', 'token-footprint', 'artifacts', 'ledger.json')
+let project: Project | undefined
 let t: Tally = start()
-let prompt = 0
+// The project's other sessions; this one is added live.
+let others: { wh: number; usd: number } | undefined
 const pages = new Set<ServerResponse>()
 
 const card = () => {
   const last = t.prompts.at(-1)
-  const v = view(t.total.wh, last?.wh ?? 0, ml(whLastMinute(t, Date.now())), t.total.usd, last?.usd ?? 0, costNote(t))
+  const projectUsage = project && { wh: (others?.wh ?? 0) + t.total.wh, usd: (others?.usd ?? 0) + t.total.usd }
+  const v = view(t.total.wh, last?.wh ?? 0, ml(whLastMinute(t, Date.now())), t.total.usd, last?.usd ?? 0, costNote(t), projectUsage)
   return cardSvg(v, t.prompts)
 }
 const push = () => {
@@ -59,20 +68,28 @@ const session = await joinSession({
     createCanvas({
       id: CANVAS,
       displayName: 'Footprint',
-      description: 'Water, electricity, CO2 and cost of this session’s model requests, estimated from their tokens.',
+      description: 'Water, electricity, CO2 and cost of this session’s model requests and of the project so far, estimated from their tokens.',
       open: async () => ({ title: 'Footprint', url: await serve() }),
     }),
   ],
 })
 
-// A prompt is everything Copilot does for one user message.
-session.on('user.message', () => {
-  prompt += 1
-})
-session.on('assistant.usage', e => {
-  t = tally(t, { trace: String(prompt), endMs: Date.parse(e.timestamp) || Date.now(), usage: usageOf(e.data) })
+// The project's other sessions, from the ledger. Chats outside a project have none.
+const rescan = () => {
+  if (!project) return
+  others = projectTotal(scan(home, ledgerFile), project, session.sessionId)
   push()
+}
+
+// This session's saved events: all of them so far, then each one as it lands.
+followSession(home, ledgerFile, session.sessionId, (next, nextProject) => {
+  const projectChanged = project !== nextProject
+  t = next
+  project = nextProject
+  if (projectChanged && project) rescan()
+  else push()
 })
+setInterval(rescan, RESCAN_MS).unref()
 
 // The usage rate falls back to idle once the last minute is quiet.
 let rate = 0

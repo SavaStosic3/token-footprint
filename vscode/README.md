@@ -2,7 +2,7 @@
 
 Shows the water, electricity, CO₂ and cost of your GitHub Copilot Chat requests in VS Code, from their tokens.
 
-- **Footprint panel** (drop icon in the activity bar): water, electricity, CO₂ and cost since the window opened, each with an everyday comparison, plus the latest prompt, the usage rate and a per-prompt graph.
+- **Footprint panel** (drop icon in the activity bar): water, electricity, CO₂ and cost since the window opened, each with an everyday comparison, plus the latest prompt, the usage rate, a per-prompt graph and the project's total across sessions.
 - **Status bar:** the same totals at a glance. Click to open the panel.
 
 ## Setup
@@ -23,3 +23,5 @@ These are estimates, not measurements, except cost where Copilot reports it.
 - **Water, electricity and CO₂:** estimated from the tokens, as described in [How the numbers are estimated](https://github.com/SavaStosic3/token-footprint#how-the-numbers-are-estimated).
 
 The panel counts every Copilot Chat request since its window opened, in any VS Code window: the agent host serves all windows and doesn't record which one a request came from. Reloading the window starts over.
+
+The project total adds up every session Copilot saved for the workspace's repository or folder, so it carries across windows and restarts. It needs VS Code 1.146 or later.
