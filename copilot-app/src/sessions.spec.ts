@@ -5,7 +5,8 @@ import * as path from 'node:path'
 import { test } from 'node:test'
 
 import { start, tally } from '../../vscode/src/copilotLog.ts'
-import { follow, projectOf, projectTotal, repoSlug, sameProject, scan, sessionFile, sessionParser } from './sessions.ts'
+import { saveSession } from './ledger.ts'
+import { follow, followSession, projectOf, projectTotal, repoSlug, sameProject, scan, sessionFile, sessionParser } from './sessions.ts'
 
 const tmp = () => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tf-sessions-')))
 const line = (type: string, data: object, extra: object = {}) => JSON.stringify({ type, data, id: Math.random().toString(16).slice(2), timestamp: '2026-11-17T10:00:00.000Z', ...extra })
@@ -101,16 +102,13 @@ test('the project total adds up its sessions, and keeps one Copilot deleted', ()
   assert.equal(Math.round(first.usd * 100), 3)
   assert.ok(first.wh > 0)
   // The caller's own session is left out when it adds that one itself.
-  assert.equal(Math.round(projectTotal(scan(home, ledger, 'b'), mine, 'b')!.usd * 100), 1)
+  assert.equal(Math.round(projectTotal(scan(home, ledger), mine, 'b')!.usd * 100), 1)
   assert.equal(projectTotal(scan(home, ledger), projectOf(tmp(), home)!), undefined)
 
   // Session b grows, session a is deleted by Copilot: a still counts from the ledger.
   fs.appendFileSync(sessionFile(home, 'b'), usage('gpt-6-luna', 1000, 100, 0, 4_000_000_000) + '\n')
   fs.rmSync(path.dirname(sessionFile(home, 'a')), { recursive: true })
   assert.equal(Math.round(projectTotal(scan(home, ledger), mine)!.usd * 100), 7)
-  // A damaged ledger starts over instead of failing.
-  fs.writeFileSync(ledger, 'not json')
-  assert.equal(Math.round(projectTotal(scan(home, ledger), mine)!.usd * 100), 6)
 })
 
 test('follow reads what a file holds, then what is appended, whole lines only', async () => {
@@ -123,4 +121,63 @@ test('follow reads what a file holds, then what is appended, whole lines only', 
   await new Promise(resolve => setTimeout(resolve, 2200))
   stop()
   assert.deepEqual(got, ['one', 'two', 'three', 'four'])
+})
+
+test('the active panel saves its last usage before Copilot prunes the session', { timeout: 10000 }, async t => {
+  const home = tmp()
+  const ledger = path.join(tmp(), 'ledger.json')
+  const shop = tmp()
+  const mine = projectOf(shop, home)!
+  write(home, 'a', session(shop, usage('gpt-6-luna', 1000, 100, 0, 2_000_000_000)))
+  let finished!: () => void
+  const observed = new Promise<void>(resolve => { finished = resolve })
+  const stop = followSession(home, ledger, 'a', next => {
+    if (next.billed === 2) finished()
+  })
+  t.after(stop)
+  fs.appendFileSync(sessionFile(home, 'a'), usage('gpt-6-luna', 1000, 100, 0, 1_000_000_000) + '\n')
+  await observed
+  stop()
+  fs.rmSync(path.dirname(sessionFile(home, 'a')), { recursive: true })
+
+  write(home, 'b', session(shop, usage('gpt-6-luna', 1000, 100, 0, 2_000_000_000)))
+  t.after(followSession(home, ledger, 'b', next => {
+    const others = projectTotal(scan(home, ledger), mine, 'b')
+    assert.equal(Math.round(((others?.usd ?? 0) + next.total.usd) * 100), 5)
+  }))
+  assert.equal(Math.round(projectTotal(scan(home, ledger), mine)!.usd * 100), 5)
+})
+
+test('a late writer preserves newer usage and the other sessions already committed', () => {
+  const home = tmp()
+  const ledger = path.join(tmp(), 'ledger.json')
+  const shop = tmp()
+  write(home, 'a', session(shop, usage('gpt-6-luna', 1000, 100, 0, 1_000_000_000)))
+  const stale = scan(home, ledger).a!
+  assert.ok(stale.revision)
+
+  fs.appendFileSync(sessionFile(home, 'a'), usage('gpt-6-luna', 1000, 100, 0, 2_000_000_000) + '\n')
+  write(home, 'b', session(shop, usage('gpt-6-luna', 1000, 100, 0, 4_000_000_000)))
+  scan(home, ledger)
+  fs.rmSync(path.join(home, 'session-state'), { recursive: true })
+
+  // The first writer finishes publishing the revision it read before the second scan.
+  const published = saveSession(ledger, 'a', { ...stale, revision: stale.revision })
+  assert.equal(Math.round(published.total.usd * 100), 3)
+  const kept = scan(home, ledger)
+  assert.equal(Math.round(kept.a!.total.usd * 100), 3)
+  assert.equal(Math.round(kept.b!.total.usd * 100), 4)
+})
+
+test('preserves legacy entries for deleted sessions and can read past a damaged legacy ledger', () => {
+  const home = tmp()
+  const ledger = path.join(tmp(), 'ledger.json')
+  const shop = tmp()
+  write(home, 'live', session(shop, usage('gpt-6-luna', 1000, 100, 0, 1_000_000_000)))
+  const mine = projectOf(shop, home)!
+  const entry = { ...mine, size: 100, total: { ...start().total, usd: 0.02 } }
+  fs.writeFileSync(ledger, JSON.stringify({ deleted: entry }))
+  assert.equal(Math.round(projectTotal(scan(home, ledger), mine)!.usd * 100), 3)
+  fs.writeFileSync(ledger, 'not json')
+  assert.equal(Math.round(projectTotal(scan(home, ledger), mine)!.usd * 100), 1)
 })

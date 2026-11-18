@@ -4,8 +4,8 @@ import * as path from 'node:path'
 import { createCanvas, joinSession } from '@github/copilot-sdk/extension'
 
 import { cardSvg, ml, view } from '../../core/footprint.ts'
-import { costNote, start, tally, whLastMinute, type Tally } from '../../vscode/src/copilotLog.ts'
-import { copilotHome, follow, projectTotal, scan, sessionFile, sessionParser } from './sessions.ts'
+import { costNote, start, whLastMinute, type Tally } from '../../vscode/src/copilotLog.ts'
+import { copilotHome, followSession, projectTotal, scan, type Project } from './sessions.ts'
 
 // The Footprint canvas for the GitHub Copilot app: the session's water,
 // electricity, CO2 and cost, and the project's running total. The numbers come
@@ -19,7 +19,7 @@ const RESCAN_MS = 30_000
 
 const home = copilotHome()
 const ledgerFile = path.join(home, 'extensions', 'token-footprint', 'artifacts', 'ledger.json')
-const parser = sessionParser(home)
+let project: Project | undefined
 let t: Tally = start()
 // The project's other sessions; this one is added live.
 let others: { wh: number; usd: number } | undefined
@@ -27,8 +27,8 @@ const pages = new Set<ServerResponse>()
 
 const card = () => {
   const last = t.prompts.at(-1)
-  const project = parser.project() && { wh: (others?.wh ?? 0) + t.total.wh, usd: (others?.usd ?? 0) + t.total.usd }
-  const v = view(t.total.wh, last?.wh ?? 0, ml(whLastMinute(t, Date.now())), t.total.usd, last?.usd ?? 0, costNote(t), project || undefined)
+  const projectUsage = project && { wh: (others?.wh ?? 0) + t.total.wh, usd: (others?.usd ?? 0) + t.total.usd }
+  const v = view(t.total.wh, last?.wh ?? 0, ml(whLastMinute(t, Date.now())), t.total.usd, last?.usd ?? 0, costNote(t), projectUsage)
   return cardSvg(v, t.prompts)
 }
 const push = () => {
@@ -76,22 +76,18 @@ const session = await joinSession({
 
 // The project's other sessions, from the ledger. Chats outside a project have none.
 const rescan = () => {
-  const project = parser.project()
   if (!project) return
-  others = projectTotal(scan(home, ledgerFile, session.sessionId), project, session.sessionId)
+  others = projectTotal(scan(home, ledgerFile), project, session.sessionId)
   push()
 }
 
 // This session's saved events: all of them so far, then each one as it lands.
-follow(sessionFile(home, session.sessionId), lines => {
-  const known = !!parser.project()
-  let changed = false
-  for (const line of lines) {
-    const call = parser.line(line)
-    if (call) (t = tally(t, call)), (changed = true)
-  }
-  if (!known && parser.project()) rescan()
-  else if (changed) push()
+followSession(home, ledgerFile, session.sessionId, (next, nextProject) => {
+  const projectChanged = project !== nextProject
+  t = next
+  project = nextProject
+  if (projectChanged && project) rescan()
+  else push()
 })
 setInterval(rescan, RESCAN_MS).unref()
 
