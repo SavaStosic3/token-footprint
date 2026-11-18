@@ -118,7 +118,7 @@ These are estimates, not measurements. Every constant and price is in [`core/foo
 - **CO₂:** 0.35 g per Wh, the US grid average (EPA eGRID 2023), compared with a typical car at about 400 g per mile.
 - **Cost:** Copilot's own charge when it reports one ([AI credits](https://docs.github.com/en/copilot/concepts/billing-and-usage/individuals/billing)). Otherwise the model's published API price, checked 2026-11-15, for:
   - Claude Fable 5.2, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5 and Haiku 5.5 ([Anthropic](https://platform.claude.com/docs/en/about-claude/pricing))
-  - GPT-6.1 Sol and Terra, GPT-6 Sol and Luna ([OpenAI](https://developers.openai.com/api/docs/pricing))
+  - GPT-6.2 Astra and Sol, GPT-6.1 Sol and Terra, GPT-6 Astra, Sol and Luna ([OpenAI](https://developers.openai.com/api/docs/pricing))
   - Gemini 4 Argon, Carbon and Hydrogen, and Gemini 3.8 Flash ([Google](https://aistudio.google.com/docs/pricing))
   - MAI-Code-1.1-Flash ([GitHub's Copilot rate](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing))
 

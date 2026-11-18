@@ -47,6 +47,16 @@ test('cost follows each model\'s published price', async () => {
   expect(micro(usage('claude-sonnet-5-5'))).toBe(2000 + 10000 + 1000)
   expect(micro(usage('claude-opus-5-5'))).toBe(4000 + 20000 + 2000)
   expect(micro(usage('gpt-6.1-terra'))).toBe(1000 + 5000 + 500)
+  // Include fresh input, output, cache reads and 30-minute cache writes.
+  for (const [model, input, output, read, write] of [
+    ['gpt-6.2-astra', 8, 40, 0.4, 10],
+    ['gpt-6.2-sol', 2, 10, 0.1, 2.5],
+    ['gpt-6-astra', 10, 50, 1, 12.5],
+  ] as const) {
+    const atLimit = { ...usage(model), input_tokens: 261000, cache_creation_input_tokens: 1000 }
+    expect(micro(atLimit)).toBe(261000 * input + 1000 * output + 10000 * read + 1000 * write)
+    expect(micro({ ...atLimit, input_tokens: 261001 })).toBe(261001 * 2 * input + 1500 * output + 20000 * read + 2000 * write)
+  }
   // Past 272K prompt tokens GPT-6.1 Sol bills the whole request at its long-context rate.
   expect(micro({ ...usage('gpt-6.1-sol'), input_tokens: 300000 })).toBe(300000 * 4 + 15000 + 2000)
   expect(micro(usage('gemini-4-argon'))).toBeGreaterThan(0)
